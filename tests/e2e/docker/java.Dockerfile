@@ -17,8 +17,9 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
       -DskipTests -Dcheckstyle.skip=true -Djacoco.skip=true \
  && cp src/ledger/${SERVICE}/target/${SERVICE}-*.jar /app.jar
 
-# Same base image the upstream Jib build uses.
-FROM eclipse-temurin:17.0.4.1_1-jre-alpine@sha256:e1506ba20f0cb2af6f23e24c7f8855b417f0b085708acd9b85344a884ba77767
+# Upstream Jib uses eclipse-temurin 17.0.4.1, whose cgroup detection throws in Micrometer's
+# ProcessorMetrics on GitHub-hosted runners; a current 17 JRE avoids that.
+FROM eclipse-temurin:17-jre-alpine@sha256:3c472129dc75a8d1d7a3f2df5b2093a8077e4493deff046754d4764d0371de63
 # Optional Start-Class override, used when a module's manifest names a class that does not exist.
 ARG MAIN_CLASS=
 ENV LOADER_MAIN=${MAIN_CLASS}
