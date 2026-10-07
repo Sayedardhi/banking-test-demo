@@ -1,0 +1,12 @@
+{
+  "services": [
+    {"id":"ledgerwriter","name":"Transaction processing","language":"Java","path":"src/ledger/ledgerwriter","runner":"java","tests":"src/test/java/**/*Test.java"},
+    {"id":"userservice","name":"Authentication","language":"Python","path":"src/accounts/userservice","runner":"python","tests":"tests/test_*.py"},
+    {"id":"contacts","name":"Contacts & account data","language":"Python","path":"src/accounts/contacts","runner":"python","tests":"tests/test_*.py"},
+    {"id":"audit","name":"Audit & sensitive data","language":"TypeScript","path":"src/audit","runner":null,"tests":"tests/**/*"},
+    {"id":"balancereader","name":"Account balances","language":"Java","path":"src/ledger/balancereader","runner":"java","tests":"src/test/java/**/*Test.java"},
+    {"id":"transactionhistory","name":"Transaction history","language":"Java","path":"src/ledger/transactionhistory","runner":"java","tests":"src/test/java/**/*Test.java"},
+    {"id":"frontend","name":"Customer experience","language":"Python","path":"src/frontend","runner":null,"tests":"tests/**/*"}
+  ],
+  "suites": []
+}
