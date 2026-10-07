@@ -21,12 +21,15 @@ mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 rm -rf "$out/junit" "$out/jacoco.xml" "$out/jacoco-html.tar.gz"
 
+target="$service_dir/target"
+# Never report a previous run's results if Maven fails before running tests.
+rm -rf "$target/surefire-reports" "$target/site/jacoco"
+
 cd "$repo"
 "$mvn" -B -pl src/ledger/ledgerwriter clean verify \
   -Dcheckstyle.skip=true -Dmaven.test.failure.ignore=true "${filter[@]}"
 mvn_status=$?
 
-target="$service_dir/target"
 mkdir -p "$out/junit"
 cp "$target"/surefire-reports/TEST-*.xml "$out/junit/" 2>/dev/null || true
 cp "$target/site/jacoco/jacoco.xml" "$out/jacoco.xml" 2>/dev/null || true
