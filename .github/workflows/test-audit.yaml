@@ -1,0 +1,365 @@
+# audit test pipeline: typecheck/build, unit and integration run in parallel; the
+# audit-specific and shared Playwright journeys then run against a stack built from this
+# checkout whenever the earlier layers produced valid reports (known findings do not block
+# E2E). Each suite runs once; the summary and dashboard run reuse those reports.
+name: "Tests: audit"
+
+on:
+  pull_request:
+  push:
+    branches: [demo-baseline, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Shared journeys (tests/e2e, owned by the frontend work, PR #10). Checked out from this
+  # pinned commit only when the branch has no tests/e2e; application code stays from the checkout.
+  E2E_SUITE_REF: 9c96622ccb4c45ef19bc5de793f704d1198657c4
+  REPORTS: ${{ github.workspace }}/reports
+
+jobs:
+  checks:
+    name: Typecheck + build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            src/audit/package-lock.json
+            src/audit/tests/e2e/package-lock.json
+      - name: Install
+        working-directory: src/audit
+        run: |
+          npm ci --no-audit --no-fund
+          (cd tests/e2e && npm ci --no-audit --no-fund)
+      - name: Strict typecheck (production, unit/integration tests, Playwright specs)
+        working-directory: src/audit
+        run: |
+          set -o pipefail
+          mkdir -p "$REPORTS/checks"
+          { npm run --silent typecheck && npm run --silent typecheck:tests && npx tsc -p tests/e2e/tsconfig.json; } 2>&1 | tee "$REPORTS/checks/typecheck.txt"
+      - name: Production build and container image
+        run: |
+          set -o pipefail
+          (cd src/audit && npm run --silent build)
+          docker build -t audit:check src/audit 2>&1 | tee -a "$REPORTS/checks/typecheck.txt" | tail -5
+      - name: Upload check output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-checks
+          path: ${{ env.REPORTS }}/checks
+          if-no-files-found: warn
+
+  unit:
+    name: Unit (node:test + c8)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/audit/package-lock.json
+      - name: Unit tests
+        id: tests
+        run: |
+          set +e
+          bash src/audit/scripts/report-tests.sh unit "$REPORTS/unit"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 src/audit/scripts/summarize.py --markdown unit="$REPORTS/unit" >> "$GITHUB_STEP_SUMMARY"
+          python3 src/audit/scripts/summarize.py --harness unit="$REPORTS/unit" >> "$GITHUB_OUTPUT"
+      - name: Upload unit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-unit-reports
+          path: ${{ env.REPORTS }}/unit
+          if-no-files-found: warn
+      - name: Fail on unit test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::audit unit layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  integration:
+    name: Integration (real server process + SQLite file)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/audit/package-lock.json
+      - name: Integration tests (fresh temporary database per suite)
+        id: tests
+        run: |
+          set +e
+          bash src/audit/scripts/report-tests.sh integration "$REPORTS/integration"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 src/audit/scripts/summarize.py --markdown integration="$REPORTS/integration" >> "$GITHUB_STEP_SUMMARY"
+          python3 src/audit/scripts/summarize.py --harness integration="$REPORTS/integration" >> "$GITHUB_OUTPUT"
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-integration-reports
+          path: ${{ env.REPORTS }}/integration
+          if-no-files-found: warn
+      - name: Fail on integration test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::audit integration layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  e2e:
+    name: E2E (Playwright, source-built stack)
+    needs: [checks, unit, integration]
+    # Requires valid prerequisite results, not passing ones: findings in unit/integration
+    # must not prevent the browser journeys from running.
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.unit.outputs.harness == 'ok' && needs.integration.outputs.harness == 'ok' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      audit_code: ${{ steps.audit.outputs.code }}
+      journeys_code: ${{ steps.journeys.outputs.code }}
+    env:
+      E2E_VIDEO: 'on'
+      E2E_TRACE: 'on'
+      E2E_BASE_URL: http://localhost:18080
+      AUDIT_URL: http://localhost:18090
+      AUDIT_TOKEN: local-demo-audit-token
+      E2E_COMPOSE_PROJECT: banking-e2e
+      MAVEN_MIRROR_URL: https://maven-central.storage-download.googleapis.com/maven2
+      COMPOSE: docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml
+      LOGS: ${{ github.workspace }}/reports/e2e-logs
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select shared Playwright journeys
+        run: |
+          if [ -f tests/e2e/package.json ]; then
+            echo "E2E_SUITE=tests/e2e from this checkout" >> "$GITHUB_ENV"
+          else
+            git fetch --no-tags --depth=1 origin "$E2E_SUITE_REF"
+            git checkout FETCH_HEAD -- tests/e2e
+            git reset -q
+            echo "E2E_SUITE=tests/e2e from $E2E_SUITE_REF (PR #10); application code from this checkout" >> "$GITHUB_ENV"
+          fi
+          mkdir -p "$LOGS" "$REPORTS/audit-e2e" "$REPORTS/journeys-e2e"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            src/audit/package-lock.json
+            src/audit/tests/e2e/package-lock.json
+            tests/e2e/package-lock.json
+      - name: Install Playwright (both suites)
+        run: |
+          (cd tests/e2e && npm ci --no-audit --no-fund)
+          (cd src/audit && npm ci --no-audit --no-fund)
+          (cd src/audit/tests/e2e && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium)
+          (cd tests/e2e && npx playwright install chromium)
+      - name: Discover tests (fails on zero)
+        run: |
+          a=$(cd src/audit/tests/e2e && npx playwright test --list --reporter=list | grep -cE '^\s+\[chromium\]' || true)
+          j=$(cd tests/e2e && npx playwright test --list --reporter=list | grep -cE '^\s+\[chromium\]' || true)
+          echo "Discovered $a audit and $j shared journey Playwright tests"
+          echo "DISCOVERED=audit $a, journeys $j" >> "$GITHUB_ENV"
+          test "$a" -gt 0 && test "$j" -gt 0
+      - name: Build audit and the banking stack from this checkout
+        run: |
+          mkdir -p .local/keys
+          openssl genrsa -out .local/keys/privatekey 2048
+          openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
+          if ! $COMPOSE up -d --build --wait --wait-timeout 900; then
+            $COMPOSE ps -a
+            for s in $($COMPOSE ps -a --status exited --format '{{.Service}}'); do
+              echo "::group::logs: $s"; $COMPOSE logs --no-color --tail 150 "$s"; echo "::endgroup::"
+            done
+            exit 1
+          fi
+          $COMPOSE images | tee "$LOGS/stack-images.txt"
+      - name: Wait for readiness and verify source-built images
+        run: |
+          set -x
+          for url in "$E2E_BASE_URL/ready" "$E2E_BASE_URL/login" "$AUDIT_URL/health"; do
+            timeout 120 bash -c "until curl -fsS -o /dev/null '$url'; do sleep 2; done"
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$AUDIT_URL/events")" = 401
+          curl -fsS -o /dev/null -H "Authorization: Bearer $AUDIT_TOKEN" "$AUDIT_URL/events"
+          images=$($COMPOSE ps -a --format '{{.Service}} {{.Image}}')
+          echo "$images"
+          grep -qx 'audit banking-e2e/audit:source' <<<"$images"
+          ! awk '{print $2}' <<<"$images" | grep -v '^banking-e2e/'
+      - name: Shared journeys (login, deposit, payment)
+        id: journeys
+        working-directory: tests/e2e
+        env:
+          E2E_STACK: existing
+        run: |
+          set +e
+          bash scripts/report-tests.sh "$REPORTS/journeys-e2e"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      # Runs last: its outage test stops and restarts the audit container.
+      - name: Audit Playwright suite (audit trail, outage, read auth)
+        id: audit
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          bash src/audit/scripts/report-tests.sh e2e "$REPORTS/audit-e2e"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: E2E summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import os, xml.etree.ElementTree as ET
+          reports = os.environ['REPORTS']
+          print('### audit pipeline: Playwright\n')
+          print(f"Shared suite: {os.environ.get('E2E_SUITE', '?')}. Discovered: {os.environ.get('DISCOVERED', '?')}.\n")
+          for name in ('audit-e2e', 'journeys-e2e'):
+              try:
+                  cases = ET.parse(f'{reports}/{name}/junit.xml').getroot().findall('.//testcase')
+              except (OSError, ET.ParseError) as ex:
+                  print(f'- {name}: no JUnit report ({type(ex).__name__})'); continue
+              bad = [c.get('name') for c in cases if c.find('failure') is not None or c.find('error') is not None]
+              skipped = sum(c.find('skipped') is not None for c in cases)
+              print(f'- {name}: tests {len(cases)}, passed {len(cases) - len(bad) - skipped}, failed {len(bad)}, skipped {skipped}')
+              for b in bad:
+                  print(f'  - failed: {b}')
+          PY
+      - name: Collect service logs and stop the stack
+        if: always()
+        run: |
+          [ -f tests/e2e/compose.source.yaml ] || exit 0
+          $COMPOSE ps -a > "$LOGS/compose-ps.txt" 2>&1 || true
+          $COMPOSE logs --no-color > "$LOGS/compose-logs.txt" 2>&1 || true
+          $COMPOSE logs --no-color audit > "$LOGS/audit.log" 2>&1 || true
+          $COMPOSE down --remove-orphans || true
+          docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f
+      - name: Upload audit Playwright reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-e2e-reports
+          path: ${{ env.REPORTS }}/audit-e2e
+          if-no-files-found: warn
+      - name: Upload shared journey reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journeys-e2e-reports
+          path: ${{ env.REPORTS }}/journeys-e2e
+          if-no-files-found: warn
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-e2e-service-logs
+          path: ${{ env.LOGS }}
+          if-no-files-found: warn
+      - name: Fail on Playwright failures
+        if: steps.audit.outputs.code != '0' || steps.journeys.outputs.code != '0'
+        run: echo "::error::Playwright exited audit=${{ steps.audit.outputs.code }} journeys=${{ steps.journeys.outputs.code }}" && exit 1
+
+  report:
+    name: Pipeline summary + dashboard run
+    needs: [checks, unit, integration, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.REPORTS }}
+      - name: Job summary by layer
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHECKS: ${{ needs.checks.result }}
+          UNIT: ${{ needs.unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          {
+            echo "## audit pipeline"
+            echo
+            echo "| Stage | Job result | Artifacts |"
+            echo "|---|---|---|"
+            echo "| Typecheck + build | $CHECKS | [audit-checks]($RUN_URL#artifacts) |"
+            echo "| Unit | $UNIT | [audit-unit-reports]($RUN_URL#artifacts) |"
+            echo "| Integration | $INTEGRATION | [audit-integration-reports]($RUN_URL#artifacts) |"
+            echo "| E2E (Playwright) | $E2E | [audit-e2e-reports, journeys-e2e-reports, audit-e2e-service-logs]($RUN_URL#artifacts) |"
+            echo
+            python3 src/audit/scripts/summarize.py --markdown \
+              unit="$REPORTS/audit-unit-reports" integration="$REPORTS/audit-integration-reports"
+            echo
+            python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          for label, name in (('audit e2e', 'audit-e2e-reports'), ('journeys e2e', 'journeys-e2e-reports')):
+              try:
+                  cases = ET.parse(os.path.join(os.environ['REPORTS'], name, 'junit.xml')).getroot().findall('.//testcase')
+              except (OSError, ET.ParseError):
+                  print(f'- {label}: no JUnit report (job skipped or did not reach Playwright)'); continue
+              bad = sum(c.find('failure') is not None or c.find('error') is not None for c in cases)
+              skipped = sum(c.find('skipped') is not None for c in cases)
+              print(f'- {label}: tests {len(cases)}, passed {len(cases) - bad - skipped}, failed {bad}, skipped {skipped}; '
+                    'code coverage not measured (black-box browser tests)')
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Dashboard-compatible run (from the reports above, no re-execution)
+        if: always()
+        run: |
+          id=$(python3 src/audit/scripts/dashboard_run.py \
+            "audit:unit:${{ needs.unit.outputs.code || 'none' }}:$REPORTS/audit-unit-reports" \
+            "audit:integration:${{ needs.integration.outputs.code || 'none' }}:$REPORTS/audit-integration-reports" \
+            "audit:e2e:${{ needs.e2e.outputs.audit_code || 'none' }}:$REPORTS/audit-e2e-reports" \
+            "journeys:e2e:${{ needs.e2e.outputs.journeys_code || 'none' }}:$REPORTS/journeys-e2e-reports")
+          echo "Dashboard run $id"
+          echo "Dashboard run \`$id\` (artifact audit-dashboard-run): unzip into \`.local/test-observability/runs/\` and run \`dashboard.py serve\`." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload dashboard run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-dashboard-run
+          path: .local/test-observability/runs/
+          if-no-files-found: warn
+      - name: Final status (test failures stay visible)
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          bad = {k: v['result'] for k, v in json.loads(os.environ['RESULTS']).items() if v['result'] != 'success'}
+          for k, v in bad.items():
+              print(f'::error::{k}: {v}')
+          sys.exit(1 if bad else 0)
+          PY
