@@ -1,9 +1,67 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Demo Bank · Test evidence</title><link rel="stylesheet" href="style.css"></head><body>
-<header><a class="brand" href="/"><span>d.</span>Demo Bank <b>/</b> Engineering</a><span class="live"><i></i> Local evidence · refreshes every 5s</span></header>
-<main><section class="intro"><div><p class="eyebrow">QUALITY & ASSURANCE</p><h1>Testing, made visible.</h1><p class="subtitle">From uncovered behavior to evidence you can review.</p></div><a class="app-link" href="http://localhost:8080" target="_blank" rel="noopener">Open banking app ↗</a></section>
-<section class="run-controls"><div><label for="current">Viewing run</label><select id="current"></select></div><div><label for="baseline">Compare against</label><select id="baseline"></select></div><div id="provenance"></div></section>
-<div id="notice" role="status"></div><section class="metrics" id="metrics"></section>
-<section class="panel"><div class="panel-title"><div><p class="eyebrow">SERVICE READINESS</p><h2>Coverage & execution</h2></div><span class="caption">Measured results only. No blended coverage score.</span></div><div class="scroll"><table><thead><tr><th>Service</th><th>Unit</th><th>Integration</th><th>E2E</th><th>Unit line coverage</th><th>Unit branch coverage</th><th>vs. baseline</th></tr></thead><tbody id="services"></tbody></table></div></section>
-<section class="lower"><div class="panel"><div class="panel-title"><div><p class="eyebrow">THREE LAYERS OF CONFIDENCE</p><h2>Test results</h2></div></div><div id="layers"></div></div><div class="panel"><div class="panel-title"><div><p class="eyebrow">TRACEABLE BY DESIGN</p><h2>How to update this view</h2></div></div><div class="instructions"><p>Run the collector on the code you want to demonstrate.</p><code>python3 tools/test-observability/dashboard.py run</code><p>Freeze a completed run before Devin starts.</p><code>python3 tools/test-observability/dashboard.py baseline RUN_ID</code><p>After applying Devin’s changes, run the collector again. New runners register in <strong>config.json</strong>. Results stay local and can be exported as CI artifacts.</p></div></div></section>
-<section id="details" class="panel" hidden><div class="panel-title"><div><p class="eyebrow">EXECUTION EVIDENCE</p><h2 id="detail-title"></h2></div><button id="close">Close</button></div><div id="detail-content"></div></section>
-<footer>Prepared synthetic banking demo · A passing test is evidence of a checked behavior, not regulatory certification.<br>“No harness,” “not configured,” and “not run” never count as passing. Coverage comparisons require the same file scope and report format.</footer></main><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test coverage · Demo Bank</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Demo Bank home"><span class="brand-mark" aria-hidden="true">db</span><span>Demo Bank<small>Engineering workspace</small></span></a>
+    <div class="nav-section">QUALITY</div>
+    <a class="nav-item active" href="/" aria-current="page"><span aria-hidden="true">▦</span> Test coverage</a>
+    <a class="nav-item" href="http://localhost:8080" target="_blank" rel="noopener"><span aria-hidden="true">↗</span> Banking app</a>
+    <div class="sidebar-bottom"><span class="environment-dot"></span> Local environment<small>Synthetic banking demo</small></div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar"><span>Quality <span class="slash">/</span> <strong>Test coverage</strong></span><span id="connection" class="connection">Connecting…</span></header>
+    <main>
+      <div class="page-heading"><div><h1>Test coverage</h1><p>Compare test runs. Inspect the evidence.</p></div><button id="guide-toggle" class="text-button" aria-expanded="false" aria-controls="guide">Run instructions <span aria-hidden="true">↗</span></button></div>
+      <section id="guide" class="guide" hidden aria-label="Run instructions">
+        <div><strong>1. Collect results</strong><code>python3 tools/test-observability/dashboard.py run</code></div>
+        <div><strong>2. Save your before state</strong><code>python3 tools/test-observability/dashboard.py baseline RUN_ID</code></div>
+        <p>After applying Devin’s changes, run the collector again. Register new suites in <code>config.json</code>. This page reads local results; it does not connect to Devin automatically.</p>
+      </section>
+
+      <section class="comparison" aria-label="Run comparison">
+        <div class="run-control baseline-control"><label for="baseline"><span class="run-marker baseline-marker"></span>Baseline</label><select id="baseline"><option value="">Loading runs…</option></select><div id="baseline-meta" class="run-meta">—</div></div>
+        <span class="comparison-arrow" aria-hidden="true">→</span>
+        <div class="run-control"><label for="current"><span class="run-marker current-marker"></span>Current run</label><select id="current"><option value="">Loading runs…</option></select><div id="current-meta" class="run-meta">—</div></div>
+        <div class="run-state" id="run-state"></div>
+      </section>
+      <div id="notice" class="notice" role="status" hidden></div>
+
+      <section id="metrics" class="metrics" aria-label="Run summary"></section>
+
+      <section class="coverage-panel" aria-label="Service coverage">
+        <div class="table-toolbar">
+          <div id="layer-tabs" class="layer-tabs" role="group" aria-label="Test layer">
+            <button type="button" data-layer="unit" aria-pressed="true">Unit <span id="unit-count">—</span></button>
+            <button type="button" data-layer="integration" aria-pressed="false">Integration <span id="integration-count">—</span></button>
+            <button type="button" data-layer="e2e" aria-pressed="false">End-to-end <span id="e2e-count">—</span></button>
+          </div>
+          <div id="coverage-toggle" class="segmented" role="group" aria-label="Coverage metric"><button type="button" data-metric="line" aria-pressed="true">Lines</button><button type="button" data-metric="branch" aria-pressed="false">Branches</button></div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Tests</th><th scope="col"><span class="run-marker baseline-marker"></span>Baseline</th><th scope="col"><span class="run-marker current-marker"></span>Current</th><th scope="col">Change</th><th scope="col"><span class="sr-only">Evidence</span></th></tr></thead>
+            <tbody id="services"></tbody>
+          </table>
+        </div>
+        <div class="table-footer"><span id="table-summary">Waiting for results</span><span>Click a service to inspect its results <span aria-hidden="true">↗</span></span></div>
+      </section>
+      <div class="footnotes"><p>Coverage is measured per service. Missing reports are unmeasured, not 0%.</p><p>Changes are shown only for matching report formats and file scopes.</p></div>
+      <footer><span>Demo Bank <span class="footer-divider">/</span> Test evidence</span><span id="updated">Updates every 5 seconds</span></footer>
+    </main>
+  </div>
+
+  <dialog id="evidence" aria-labelledby="evidence-title">
+    <div class="drawer-header"><span>TEST EVIDENCE</span><button id="close-evidence" class="icon-button" aria-label="Close evidence">×</button></div>
+    <div class="drawer-title"><h2 id="evidence-title"></h2><p id="evidence-meta"></p></div>
+    <div id="evidence-content"></div>
+  </dialog>
+</body>
+</html>
