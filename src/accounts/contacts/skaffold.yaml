@@ -44,28 +44,6 @@ test:
             - "../../../.pylintrc"
             - "pyproject.toml"
             - "uv.lock"
-  - image: contacts # unit tests
-    context: .
-    custom:
-      - command: |
-          uv run pytest -v -p no:warnings
-        timeoutSeconds: 1200
-        dependencies: 
-          paths:
-            - "**/*.py"
-            - "pyproject.toml"
-            - "uv.lock"
-  - image: contacts # code coverage
-    context: .
-    custom:
-      - command: |
-          uv run pytest --cov=./ tests/
-        timeoutSeconds: 1200
-        dependencies: 
-          paths:
-            - "**/*.py"
-            - "pyproject.toml"
-            - "uv.lock"
 profiles:
 - name: development
   activation:

@@ -1,4 +1,4 @@
-# Banking Test Demo
+# Banking Test Demo — incomplete demo baseline
 
 A local banking application for demonstrating critical-path test improvement across services. Uses synthetic accounts and transactions only; this is not a real bank.
 
@@ -12,7 +12,7 @@ Install and start Docker Desktop (or Docker Engine with Compose), then run:
 
 Open **http://localhost:8080**. Demo login: **testuser / bankofanthos**.
 
-The script creates a local JWT key pair (gitignored). Only the frontend is published, bound to localhost. Two PostgreSQL databases remain inside the Compose network. No cloud account or Kubernetes is required. First startup downloads pinned upstream release images; ARM machines run these amd64 images under emulation.
+The script creates a local JWT key pair (gitignored). The frontend (8080) and authenticated audit API (8090) are published, bound to localhost. Two PostgreSQL databases remain inside the Compose network. No cloud account or Kubernetes is required. First startup downloads pinned upstream release images; ARM machines run these amd64 images under emulation.
 
 ```sh
 docker compose ps                    # service status
@@ -25,10 +25,10 @@ docker compose down                 # stop; preserve database contents
 - Java: ledger writer, balance reader, transaction history.
 - Python: user authentication, contacts, original frontend.
 - PostgreSQL: accounts and ledger databases.
-- Upstream unit/database tests and Cypress E2E tests remain intact.
+- Selected ledgerwriter/userservice tests and the contacts test harness are intentionally removed. Other service tests and Cypress E2E remain. See DEMO-BASELINE.md.
 - Neutral Demo Bank branding; cloud tracing/metrics and traffic generator are not enabled in the local setup.
 
-**This baseline runs pinned upstream images.** The frontend template directory is mounted for branding edits. Changes to application source require a rebuilt image; Compose does not automatically run edited Java/Python source. A TypeScript frontend and deliberately prepared testing gaps are subsequent demo adaptations, not implemented in this baseline.
+**Runtime:** Java and account services use pinned upstream images. Frontend Python, templates, and static assets are mounted from this checkout; audit builds from TypeScript source. Backend integration testing against edited source still needs source-based builds. No TypeScript frontend rewrite is planned.
 
 ## Demo preparation
 

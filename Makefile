@@ -84,8 +84,9 @@ test-e2e:
 	docker run -it -v ${E2E_PATH}:/e2e -w /e2e -e CYPRESS_baseUrl=$${E2E_URL} cypress/included:5.0.0 $(E2E_FLAGS)
 
 test-unit:
+	@echo "PARTIAL DEMO SUITE: contacts and audit have no test harness; this is not full coverage."
 	mvn test
-	for SERVICE in "accounts/contacts" "accounts/userservice"; \
+	for SERVICE in "accounts/userservice"; \
 	do \
 		(cd src/$$SERVICE && uv run pytest -v -p no:warnings); \
 	done

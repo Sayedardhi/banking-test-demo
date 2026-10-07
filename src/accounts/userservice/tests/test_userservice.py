@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 """
 Tests for userservice
 """
@@ -34,7 +33,6 @@ from userservice.tests.constants import (
     EXAMPLE_PUBLIC_KEY,
     INVALID_USERNAMES,
 )
-
 
 class TestUserservice(unittest.TestCase):
     """
@@ -114,81 +112,6 @@ class TestUserservice(unittest.TestCase):
         # assert all keys are equal except for hashed pwd
         self.assertEqual(user_object, expected_user_object)
 
-    def test_create_user_existing_409_status_code_error_message(self):
-        """test creating a new user who already exists in the DB"""
-        # mock return value of get_user which checks if user exists
-        self.mocked_db.return_value.get_user.return_value = {}
-        example_user_request = EXAMPLE_USER_REQUEST.copy()
-        # create example user request
-        example_user_request['username'] = 'foo'
-        # send request to test client
-        response = self.test_app.post('/users', data=example_user_request)
-        # assert 409 response code
-        self.assertEqual(response.status_code, 409)
-        # assert we get correct error message
-        self.assertEqual(
-            response.data,
-            'user {} already exists'.format(example_user_request['username']).encode()
-        )
-
-    def test_create_user_sql_error_500_status_code_error_message(self):
-        """test creating a new user but throws SQL error when trying to add"""
-        # mock return value of get_user which checks if user exists as None
-        self.mocked_db.return_value.get_user.return_value = None
-        # mock return value of add_user to throw SQLAlchemyError
-        self.mocked_db.return_value.add_user.side_effect = SQLAlchemyError()
-        # create example user request
-        example_user = EXAMPLE_USER_REQUEST.copy()
-        example_user['username'] = 'foo'
-        # send request to test client
-        response = self.test_app.post('/users', data=example_user)
-        # assert 500 response code
-        self.assertEqual(response.status_code, 500)
-        # assert we get correct error message
-        self.assertEqual(response.data, b'failed to create user')
-
-    def test_create_user_malformed_400_status_code_error_message(self):
-        """test creating a new user without required keys"""
-        # test each expected field missing from user request
-        for expected_field in EXPECTED_FIELDS:
-            # create example user request
-            example_user = EXAMPLE_USER_REQUEST.copy()
-            # remove a required field
-            example_user.pop(expected_field)
-            # send request to test client
-            response = self.test_app.post('/users', data=example_user)
-            # assert 400 response code
-            self.assertEqual(response.status_code, 400)
-            # assert we get correct error message
-            self.assertEqual(response.data, b'missing required field(s)')
-
-    def test_create_user_malformed_empty_400_status_code_error_message(self):
-        """test creating a new user with empty value for required key"""
-        # create example user request
-        example_user = EXAMPLE_USER_REQUEST.copy()
-        # set empty value for required key
-        example_user['username'] = ''
-        # send request to test client
-        response = self.test_app.post('/users', data=example_user)
-        # assert 400 response code
-        self.assertEqual(response.status_code, 400)
-        # assert we get correct error message
-        self.assertEqual(response.data, b'missing value for input field(s)')
-
-    def test_create_user_mismatch_password_400_status_code_error_message(self):
-        """test creating a new user with mismatched password values"""
-        # create example user request
-        example_user = EXAMPLE_USER_REQUEST.copy()
-        # set mismatch values for password and password-repeat
-        example_user['password'] = 'foo'
-        example_user['password-repeat'] = 'bar'
-        # send request to test client
-        response = self.test_app.post('/users', data=example_user)
-        # assert 400 response code
-        self.assertEqual(response.status_code, 400)
-        # assert we get correct error message
-        self.assertEqual(response.data, b'passwords do not match')
-
     # mock check pw to return true to simulate correct password
     @patch('bcrypt.checkpw', return_value=True)
     def test_login_200_status_code_jwt_decoding_payload_passes(self, _mock_checkpw):
@@ -215,57 +138,3 @@ class TestUserservice(unittest.TestCase):
             decoded_value['name'],
             "{} {}".format(EXAMPLE_USER['firstname'], EXAMPLE_USER['lastname']),
         )
-
-    # mock check pw to return false
-    @patch('bcrypt.checkpw', return_value=False)
-    def test_login_invalid_password_401_status_code_error_message(self, _mock_checkpw):
-        """test logging in with existing user and wrong password"""
-        # create example user request
-        example_user = EXAMPLE_USER.copy()
-        example_user_request = EXAMPLE_USER_REQUEST.copy()
-        self.mocked_db.return_value.get_user.return_value = example_user
-        response = self.test_app.get('/login', query_string=example_user_request)
-        # assert 401 response
-        self.assertEqual(response.status_code, 401)
-        # assert we get correct error message
-        self.assertEqual(response.data, b'invalid login')
-
-    def test_login_non_existent_user_404_status_code_error_message(self):
-        """test logging in with a user that does not exist"""
-        # mock return value of get_user which checks if user exists as None
-        self.mocked_db.return_value.get_user.return_value = None
-        # example user request
-        example_user_request = EXAMPLE_USER_REQUEST.copy()
-        example_user_request['username'] = 'foo'
-        # send request to test client
-        response = self.test_app.get('/login', query_string=example_user_request)
-        # assert 404 response
-        self.assertEqual(response.status_code, 404)
-        # assert we get correct error message
-        self.assertEqual(
-            response.data,
-            'user {} does not exist'.format(example_user_request['username']).encode()
-        )
-
-    def test_create_user_400_status_code_invalid_username(self,):
-        """test adding a contact with invalid labels """
-        # mock return value of get_user which checks if user exists as None
-        self.mocked_db.return_value.get_user.return_value = None
-        # mock return value for generate_id from user_db
-        self.mocked_db.return_value.generate_accountid.return_value = '123'
-        # test for each invalid label in INVALID_USERNAMES
-        for invalid_username in INVALID_USERNAMES:
-            example_user_request = EXAMPLE_USER_REQUEST.copy()
-            # create example user request
-            example_user_request['username'] = invalid_username
-            # send request to test client
-            response = self.test_app.post('/users', data=example_user_request)
-            self.assertEqual(response.status_code, 400,
-                             'username {} returned incorrect status code'.format(invalid_username))
-            if invalid_username:
-                # assert we get correct error message
-                self.assertEqual(
-                    response.data,
-                    'username must contain 2-15 alphanumeric characters or underscores'.encode(),
-                    'username {} returned unexpected error message'.format(invalid_username)
-                )
