@@ -70,6 +70,7 @@ These tests encode the expected behaviour and fail against the current implement
 | `IdempotencyIntegrationTest.concurrentDuplicate` | two concurrent submissions of one request UUID write one row | both are written (check-then-put on the UUID cache is not atomic) |
 | `LedgerWriteIntegrationTest.missingField`, `TransactionValidatorRulesTest.rejectsMissingFieldsAsValidationErrors` | missing account/routing/amount is a 400 validation error | `NullPointerException`, HTTP 500 |
 | `LedgerWriteIntegrationTest.fractionalCents` | `amount: 2550.75` is rejected | accepted and truncated to 2550 cents |
+| `LedgerWriterControllerRulesTest$Authentication.emptyBearerToken` | `Authorization: Bearer ` (no token) answered with 401 | `ArrayIndexOutOfBoundsException` from `split("Bearer ")[1]` escapes the handler (HTTP 500) |
 
 The UUID cache is in memory per pod with a one-hour expiry, so replays across restarts or replicas are not
 detected; that limitation is documented, not tested.

@@ -49,6 +49,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -148,6 +149,16 @@ class LedgerWriterControllerRulesTest {
             String unsigned = JWT.create().withClaim("acct", ALICE).sign(Algorithm.none());
             assertRejected(submit("Bearer " + unsigned, transaction(payment(ALICE, BOB, 100, uuid()))),
                     HttpStatus.UNAUTHORIZED, LedgerWriterController.UNAUTHORIZED_CODE);
+        }
+
+        @Test
+        @DisplayName("'Bearer ' with no token: 401 like any invalid credential, not an unhandled crash")
+        void emptyBearerToken() {
+            ResponseEntity<?> response = Assertions.assertDoesNotThrow(
+                    () -> submit("Bearer ", transaction(payment(ALICE, BOB, 100, uuid()))),
+                    "an empty bearer credential must be answered with an HTTP status");
+            assertRejected(response, HttpStatus.UNAUTHORIZED, LedgerWriterController.UNAUTHORIZED_CODE);
+            verifyNoInteractions(balanceClient, repository);
         }
 
         @Test
