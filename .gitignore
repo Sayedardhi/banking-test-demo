@@ -214,3 +214,5 @@ go/
 
 # GitHub Actions Google Cloud credentials JSON
 gha-creds-*.json
+# Local demo runtime
+.local/

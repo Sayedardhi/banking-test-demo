@@ -1,0 +1,223 @@
+# Local synthetic-data demo. No cloud account required.
+name: banking-demo
+services:
+  ledgerwriter:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/ledgerwriter:v0.6.11@sha256:b66efed587c295788369459898e7ae5a5e15150c3fcd782170c19a8c4b31059d
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      TRANSACTIONS_API_ADDR: ledgerwriter:8080
+      BALANCES_API_ADDR: balancereader:8080
+      HISTORY_API_ADDR: transactionhistory:8080
+      CONTACTS_API_ADDR: contacts:8080
+      USERSERVICE_API_ADDR: userservice:8080
+      POSTGRES_DB: postgresdb
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ledger-db:5432/postgresdb
+      SPRING_DATASOURCE_USERNAME: admin
+      VERSION: v0.6.11
+      PORT: '8080'
+      ENABLE_TRACING: 'false'
+      ENABLE_METRICS: 'false'
+      LOG_LEVEL: info
+      NAMESPACE: local
+    volumes:
+    - ./.local/keys:/tmp/.ssh:ro
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+      ledger-db:
+        condition: service_healthy
+    hostname: ledgerwriter-local
+  accounts-db:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/accounts-db:v0.6.11@sha256:e86d6533bcd05bf9e4d7d495bf03b0a5ca571f526f3a419572b6df2c7913d588
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      ACCOUNTS_DB_URI: postgresql://accounts-admin:accounts-pwd@accounts-db:5432/accounts-db
+      POSTGRES_DB: accounts-db
+      POSTGRES_PASSWORD: accounts-pwd
+      POSTGRES_USER: accounts-admin
+      USE_DEMO_DATA: 'True'
+      DEMO_LOGIN_USERNAME: testuser
+      DEMO_LOGIN_PASSWORD: bankofanthos
+      ENABLE_TRACING: 'false'
+      ENABLE_METRICS: 'false'
+    volumes:
+    - accounts-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  transactionhistory:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/transactionhistory:v0.6.11@sha256:609acd4d93aed03139a59e3c4f58bedb695cf4649dbe6fae636d2f45bad3d811
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      POSTGRES_DB: postgresdb
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ledger-db:5432/postgresdb
+      SPRING_DATASOURCE_USERNAME: admin
+      VERSION: v0.6.11
+      PORT: '8080'
+      ENABLE_TRACING: 'false'
+      ENABLE_METRICS: 'false'
+      POLL_MS: '100'
+      CACHE_SIZE: '1000'
+      CACHE_MINUTES: '60'
+      HISTORY_LIMIT: '100'
+      LOG_LEVEL: info
+      NAMESPACE: local
+    volumes:
+    - ./.local/keys:/tmp/.ssh:ro
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+      ledger-db:
+        condition: service_healthy
+    hostname: transactionhistory-local
+  ledger-db:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/ledger-db:v0.6.11@sha256:b434822c3122bc3f4681741fc863c02f7bb2f476b0d6b307e2282b49d896c3dd
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      POSTGRES_DB: postgresdb
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ledger-db:5432/postgresdb
+      SPRING_DATASOURCE_USERNAME: admin
+      USE_DEMO_DATA: 'True'
+      DEMO_LOGIN_USERNAME: testuser
+      DEMO_LOGIN_PASSWORD: bankofanthos
+      ENABLE_TRACING: 'false'
+      ENABLE_METRICS: 'false'
+    volumes:
+    - ledger-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  frontend:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/frontend:v0.6.11@sha256:5746f018f3d85475e25b8283bf8fb476e2501196bbe71e3ce144527e7280e7ae
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      TRANSACTIONS_API_ADDR: ledgerwriter:8080
+      BALANCES_API_ADDR: balancereader:8080
+      HISTORY_API_ADDR: transactionhistory:8080
+      CONTACTS_API_ADDR: contacts:8080
+      USERSERVICE_API_ADDR: userservice:8080
+      VERSION: v0.6.11
+      PORT: '8080'
+      ENABLE_TRACING: 'false'
+      SCHEME: http
+      LOG_LEVEL: info
+      DEFAULT_USERNAME: testuser
+      DEFAULT_PASSWORD: bankofanthos
+      ENABLE_METRICS: 'false'
+      BANK_NAME: Demo Bank
+      CYMBAL_LOGO: 'false'
+      METADATA_SERVER: 127.0.0.1:9
+    volumes:
+    - ./.local/keys:/tmp/.ssh:ro
+    - ./src/frontend/templates:/app/templates:ro
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+      ledger-db:
+        condition: service_healthy
+    ports:
+    - 127.0.0.1:8080:8080
+  balancereader:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/balancereader:v0.6.11@sha256:42a51d724d0537a5214b653d63c00fd60eb9d8ee0df3f396716c9e47262ae1ee
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      POSTGRES_DB: postgresdb
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ledger-db:5432/postgresdb
+      SPRING_DATASOURCE_USERNAME: admin
+      VERSION: v0.6.11
+      PORT: '8080'
+      ENABLE_TRACING: 'false'
+      ENABLE_METRICS: 'false'
+      POLL_MS: '100'
+      CACHE_SIZE: '1000000'
+      LOG_LEVEL: info
+      NAMESPACE: local
+    volumes:
+    - ./.local/keys:/tmp/.ssh:ro
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+      ledger-db:
+        condition: service_healthy
+    hostname: balancereader-local
+  contacts:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/contacts:v0.6.11@sha256:67be31ff16e6e8de0ca0f8ee8fa9c23a900d89b2127d9877e69c488384ef8c2a
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      ACCOUNTS_DB_URI: postgresql://accounts-admin:accounts-pwd@accounts-db:5432/accounts-db
+      POSTGRES_DB: accounts-db
+      POSTGRES_PASSWORD: accounts-pwd
+      POSTGRES_USER: accounts-admin
+      VERSION: v0.6.11
+      PORT: '8080'
+      ENABLE_TRACING: 'false'
+      LOG_LEVEL: info
+      ENABLE_METRICS: 'false'
+    volumes:
+    - ./.local/keys:/tmp/.ssh:ro
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+      ledger-db:
+        condition: service_healthy
+  userservice:
+    image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/userservice:v0.6.11@sha256:4fcd6638b5ba9ac29096e83ea04f4ff280d1c66874908c7e1156337cad459dc0
+    platform: linux/amd64
+    environment:
+      LOCAL_ROUTING_NUM: '883745000'
+      PUB_KEY_PATH: /tmp/.ssh/publickey
+      ACCOUNTS_DB_URI: postgresql://accounts-admin:accounts-pwd@accounts-db:5432/accounts-db
+      POSTGRES_DB: accounts-db
+      POSTGRES_PASSWORD: accounts-pwd
+      POSTGRES_USER: accounts-admin
+      VERSION: v0.6.11
+      PORT: '8080'
+      ENABLE_TRACING: 'false'
+      TOKEN_EXPIRY_SECONDS: '3600'
+      PRIV_KEY_PATH: /tmp/.ssh/privatekey
+      LOG_LEVEL: info
+      ENABLE_METRICS: 'false'
+    volumes:
+    - ./.local/keys:/tmp/.ssh:ro
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+      ledger-db:
+        condition: service_healthy
+volumes:
+  accounts-db-data: {}
+  ledger-db-data: {}
