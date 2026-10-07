@@ -98,6 +98,9 @@ function renderSummary(run, baseline) {
 }
 
 function renderTable(run, baseline) {
+  const metricName = state.metric === 'line' ? 'lines' : 'branches';
+  $('#baseline-heading').textContent = `Baseline · ${metricName}`;
+  $('#current-heading').textContent = `Current · ${metricName}`;
   const services = run.services.filter(service => service.layers[state.layer].status !== 'not_applicable');
   setHtml('#services', services.map(service => {
     const result = service.layers[state.layer];
@@ -194,11 +197,8 @@ $('#layer-tabs').addEventListener('click', event => {
   for (const tab of $('#layer-tabs').querySelectorAll('button')) tab.setAttribute('aria-pressed', tab === button);
   render();
 });
-$('#coverage-toggle').addEventListener('click', event => {
-  const button = event.target.closest('button');
-  if (!button) return;
-  state.metric = button.dataset.metric;
-  for (const option of $('#coverage-toggle').querySelectorAll('button')) option.setAttribute('aria-pressed', option === button);
+$('#coverage-metric').addEventListener('change', event => {
+  state.metric = event.target.value;
   render();
 });
 $('#services').addEventListener('click', event => {

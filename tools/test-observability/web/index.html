@@ -43,11 +43,11 @@
             <button type="button" data-layer="integration" aria-pressed="false">Integration <span id="integration-count">—</span></button>
             <button type="button" data-layer="e2e" aria-pressed="false">End-to-end <span id="e2e-count">—</span></button>
           </div>
-          <div id="coverage-toggle" class="segmented" role="group" aria-label="Coverage metric"><button type="button" data-metric="line" aria-pressed="true">Lines</button><button type="button" data-metric="branch" aria-pressed="false">Branches</button></div>
+          <div class="coverage-selector"><label class="sr-only" for="coverage-metric">Coverage metric</label><select id="coverage-metric"><option value="line">Line coverage</option><option value="branch">Branch coverage</option></select></div>
         </div>
         <div class="table-scroll">
           <table>
-            <thead><tr><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Tests</th><th scope="col"><span class="run-marker baseline-marker"></span>Baseline</th><th scope="col"><span class="run-marker current-marker"></span>Current</th><th scope="col">Change</th><th scope="col"><span class="sr-only">Evidence</span></th></tr></thead>
+            <thead><tr><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Tests</th><th scope="col"><span class="run-marker baseline-marker"></span><span id="baseline-heading">Baseline · lines</span></th><th scope="col"><span class="run-marker current-marker"></span><span id="current-heading">Current · lines</span></th><th scope="col">Change</th><th scope="col"><span class="sr-only">Evidence</span></th></tr></thead>
             <tbody id="services"></tbody>
           </table>
         </div>
