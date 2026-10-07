@@ -1,0 +1,366 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# frontend test pipeline: lint/compile, pytest unit and pytest integration (real frontend HTTP
+# server + real audit service on temporary SQLite) run in parallel; the Playwright customer
+# journeys (tests/e2e) run against a stack built entirely from this checkout once those
+# prerequisites produced valid reports. Every suite runs once; the dashboard run is assembled
+# from the same reports.
+name: "Tests: frontend"
+
+on:
+  pull_request:
+  push:
+    branches: [demo-baseline, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  REPORTS: ${{ github.workspace }}/reports
+  PYLINT_TESTS: >-
+    --max-line-length=105
+    --disable=missing-function-docstring,missing-class-docstring,redefined-outer-name,unused-argument,import-outside-toplevel,too-few-public-methods,too-many-arguments,too-many-positional-arguments
+
+jobs:
+  checks:
+    name: Lint + compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/frontend/uv.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+      - name: Install frontend dependencies (locked)
+        working-directory: src/frontend
+        run: uv sync --frozen
+      - name: Pylint production code (repository .pylintrc)
+        working-directory: src/frontend
+        run: |
+          mkdir -p "$REPORTS/checks"
+          # Full report is published; errors and warnings gate. The baseline frontend.py has two
+          # pre-existing line-length conventions that this test-only change does not touch.
+          uv run pylint --rcfile=../../.pylintrc --exit-zero frontend.py api_call.py traced_thread_pool_executor.py \
+            | tee "$REPORTS/checks/pylint-frontend.txt"
+          uv run pylint --rcfile=../../.pylintrc --disable=C,R frontend.py api_call.py traced_thread_pool_executor.py
+      - name: Pylint test code
+        working-directory: src/frontend
+        run: |
+          # shellcheck disable=SC2086
+          uv run pylint --rcfile=../../.pylintrc $PYLINT_TESTS tests scripts/summarize.py scripts/dashboard_run.py \
+            | tee "$REPORTS/checks/pylint-tests.txt"
+      - name: Compile Python sources and collect tests
+        working-directory: src/frontend
+        run: |
+          uv run python -m compileall -q frontend.py api_call.py traced_thread_pool_executor.py tests scripts
+          uv run pytest --collect-only -q tests | tail -1 | tee "$REPORTS/checks/pytest-collect.txt"
+      - name: Shellcheck runner script
+        run: shellcheck src/frontend/scripts/report-tests.sh
+      - name: Type-check Playwright suite
+        working-directory: tests/e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc -p .
+      - name: Validate source-build compose overlay
+        run: docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml config -q
+      - name: Upload lint output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-checks
+          path: ${{ env.REPORTS }}/checks
+          if-no-files-found: warn
+
+  unit:
+    name: Unit (pytest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/frontend/uv.lock
+      - name: Unit tests
+        id: tests
+        run: |
+          set +e
+          src/frontend/scripts/report-tests.sh unit "$REPORTS/unit"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 src/frontend/scripts/summarize.py --markdown unit="$REPORTS/unit" >> "$GITHUB_STEP_SUMMARY"
+          python3 src/frontend/scripts/summarize.py --harness unit="$REPORTS/unit" >> "$GITHUB_OUTPUT"
+      - name: Upload unit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-unit-reports
+          path: ${{ env.REPORTS }}/unit
+          if-no-files-found: warn
+      - name: Fail on unit test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::frontend unit layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  integration:
+    name: Integration (frontend HTTP + real audit service/SQLite)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/frontend/uv.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/audit/package-lock.json
+      - name: Integration tests
+        id: tests
+        run: |
+          set +e
+          src/frontend/scripts/report-tests.sh integration "$REPORTS/integration"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 src/frontend/scripts/summarize.py --markdown integration="$REPORTS/integration" >> "$GITHUB_STEP_SUMMARY"
+          python3 src/frontend/scripts/summarize.py --harness integration="$REPORTS/integration" >> "$GITHUB_OUTPUT"
+      - name: Remove leftover test containers
+        if: always()
+        run: docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-integration-reports
+          path: ${{ env.REPORTS }}/integration
+          if-no-files-found: warn
+      - name: Fail on integration test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::frontend integration layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  e2e:
+    name: E2E (Playwright, source-built stack)
+    needs: [checks, unit, integration]
+    # Gate on valid prerequisite results: lint/compile must pass and both service layers must have
+    # executed with reports. Known findings in those layers do not block the browser journeys.
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.unit.outputs.harness == 'ok' && needs.integration.outputs.harness == 'ok' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+    env:
+      E2E_VIDEO: 'on'
+      E2E_TRACE: 'on'
+      FRONTEND_URL: http://localhost:18080
+      AUDIT_URL: http://localhost:18090
+      AUDIT_TOKEN: local-demo-audit-token
+      COMPOSE: docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml
+      OUT: ${{ github.workspace }}/reports/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          mkdir -p "$OUT"
+      - name: Discover tests (fails on zero)
+        working-directory: tests/e2e
+        run: |
+          n=$(npx playwright test --list | grep -cE '^\s+\[chromium\]' || true)
+          echo "Discovered $n Playwright tests"
+          echo "DISCOVERED=$n" >> "$GITHUB_ENV"
+          test "$n" -gt 0
+      - name: Build the frontend and the whole banking stack from this checkout
+        run: |
+          # Throwaway JWT signing keys for this run only (compose mounts .local/keys; never committed).
+          mkdir -p .local/keys
+          openssl genrsa -out .local/keys/privatekey 2048
+          openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
+          if ! $COMPOSE up -d --build --wait --wait-timeout 900; then
+            $COMPOSE ps -a
+            for s in $($COMPOSE ps -a --status exited --format '{{.Service}}'); do
+              echo "::group::logs: $s"; $COMPOSE logs --no-color --tail 150 "$s"; echo "::endgroup::"
+            done
+            exit 1
+          fi
+          $COMPOSE images | tee "$OUT/stack-images.txt"
+      - name: Wait for service readiness and verify the images under test
+        run: |
+          set -x
+          for url in "$FRONTEND_URL/ready" "$FRONTEND_URL/login" "$AUDIT_URL/health"; do
+            timeout 120 bash -c "until curl -fsS -o /dev/null '$url'; do sleep 2; done"
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$AUDIT_URL/events")" = 401
+          curl -fsS -o /dev/null -H "Authorization: Bearer $AUDIT_TOKEN" "$AUDIT_URL/events"
+          images=$($COMPOSE ps -a --format '{{.Service}} {{.Image}}')
+          echo "$images" | tee "$OUT/stack-services.txt"
+          grep -qx 'frontend banking-e2e/frontend:source' <<<"$images"
+          # Every application and database image must be built from this checkout.
+          ! awk '{print $2}' <<<"$images" | grep -v '^banking-e2e/'
+      - name: Playwright journeys
+        id: tests
+        env:
+          E2E_STACK: existing
+        run: |
+          set +e
+          src/frontend/scripts/report-tests.sh e2e "$OUT"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: E2E summary
+        if: always()
+        run: |
+          {
+            echo "Discovered Playwright tests: ${DISCOVERED:-?} (suite: tests/e2e from this checkout)"
+            echo
+            python3 src/frontend/scripts/summarize.py --markdown e2e="$OUT"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Collect service logs and stop the stack
+        if: always()
+        run: |
+          $COMPOSE ps -a > "$OUT/compose-ps.txt" 2>&1 || true
+          $COMPOSE logs --no-color > "$OUT/compose-logs.txt" 2>&1 || true
+          $COMPOSE logs --no-color frontend > "$OUT/frontend.log" 2>&1 || true
+          $COMPOSE logs --no-color audit > "$OUT/audit.log" 2>&1 || true
+          docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f
+          $COMPOSE down --remove-orphans || true
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-junit
+          path: reports/e2e/junit.xml
+          if-no-files-found: warn
+      - name: Upload Playwright HTML report, traces, screenshots and videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-report
+          path: |
+            reports/e2e/playwright-report.zip
+            reports/e2e/playwright-results.zip
+          if-no-files-found: warn
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-service-logs
+          path: |
+            reports/e2e/*.txt
+            reports/e2e/*.log
+          if-no-files-found: warn
+      - name: Fail on Playwright failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::Playwright exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  report:
+    name: Pipeline summary + dashboard run
+    needs: [checks, unit, integration, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.REPORTS }}
+      - name: Job summary by layer
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHECKS: ${{ needs.checks.result }}
+          UNIT: ${{ needs.unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          mkdir -p "$REPORTS/e2e"
+          cp "$REPORTS"/e2e-junit/* "$REPORTS"/e2e-playwright-report/* "$REPORTS/e2e/" 2>/dev/null || true
+          {
+            echo "## frontend pipeline"
+            echo
+            echo "| Stage | Job result | Reports |"
+            echo "|---|---|---|"
+            echo "| Lint + compile | $CHECKS | [frontend-checks]($RUN_URL#artifacts) |"
+            echo "| Unit | $UNIT | [frontend-unit-reports]($RUN_URL#artifacts) |"
+            echo "| Integration | $INTEGRATION | [frontend-integration-reports]($RUN_URL#artifacts) |"
+            echo "| E2E (Playwright) | $E2E | [e2e-playwright-report, e2e-junit, e2e-service-logs]($RUN_URL#artifacts) |"
+            echo
+            python3 src/frontend/scripts/summarize.py --markdown \
+              unit="$REPORTS/frontend-unit-reports" integration="$REPORTS/frontend-integration-reports" \
+              e2e="$REPORTS/e2e"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Dashboard-compatible run (from the reports above, no re-execution)
+        if: always()
+        run: |
+          id=$(python3 src/frontend/scripts/dashboard_run.py \
+            "frontend:unit:${{ needs.unit.outputs.code || 'none' }}:$REPORTS/frontend-unit-reports" \
+            "frontend:integration:${{ needs.integration.outputs.code || 'none' }}:$REPORTS/frontend-integration-reports" \
+            "journeys:e2e:${{ needs.e2e.outputs.code || 'none' }}:$REPORTS/e2e")
+          echo "Dashboard run $id"
+          echo "Dashboard run \`$id\`: unzip into \`.local/test-observability/runs/\` and run \`dashboard.py serve\`." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload dashboard run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dashboard-run
+          path: .local/test-observability/runs/
+          if-no-files-found: warn
+      - name: Final status (test failures stay visible)
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ['RESULTS'])
+          bad = {k: v['result'] for k, v in needs.items() if v['result'] != 'success'}
+          for k, v in bad.items():
+              print(f'::error::{k}: {v}')
+          sys.exit(1 if bad else 0)
+          PY

@@ -35,4 +35,16 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pylint>=3.0",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["integration: real HTTP boundaries (frontend server, audit service, stub backends)"]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*"]
