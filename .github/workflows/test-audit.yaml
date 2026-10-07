@@ -187,8 +187,8 @@ jobs:
           (cd tests/e2e && npx playwright install chromium)
       - name: Discover tests (fails on zero)
         run: |
-          a=$(cd src/audit/tests/e2e && npx playwright test --list | grep -cE '^\s+\[chromium\]' || true)
-          j=$(cd tests/e2e && npx playwright test --list | grep -cE '^\s+\[chromium\]' || true)
+          a=$(cd src/audit/tests/e2e && npx playwright test --list --reporter=list | grep -cE '^\s+\[chromium\]' || true)
+          j=$(cd tests/e2e && npx playwright test --list --reporter=list | grep -cE '^\s+\[chromium\]' || true)
           echo "Discovered $a audit and $j shared journey Playwright tests"
           echo "DISCOVERED=audit $a, journeys $j" >> "$GITHUB_ENV"
           test "$a" -gt 0 && test "$j" -gt 0

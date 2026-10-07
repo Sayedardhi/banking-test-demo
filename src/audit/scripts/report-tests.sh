@@ -27,7 +27,7 @@ cd "$service_dir"
 if [[ "$layer" == e2e ]]; then
   cd tests/e2e
   [[ -d node_modules/@playwright/test ]] || npm ci --no-audit --no-fund || exit 2
-  discovered=$(npx playwright test --list 2>/dev/null | grep -cE '^\s+\[chromium\]')
+  discovered=$(npx playwright test --list --reporter=list 2>/dev/null | grep -cE '^\s+\[chromium\]')
   echo "Discovered $discovered audit Playwright tests"
   [[ "$discovered" -gt 0 ]] || { echo "No Playwright tests discovered" >&2; exit 3; }
   E2E_REPORT_DIR="$out" npx playwright test
