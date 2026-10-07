@@ -1,4 +1,4 @@
-# Banking Test Demo — incomplete demo baseline
+# Banking Test Demo
 
 A local banking application for demonstrating critical-path test improvement across services. Uses synthetic accounts and transactions only; this is not a real bank.
 
