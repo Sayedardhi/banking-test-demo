@@ -21,7 +21,7 @@ The persistent demo database volumes are never used.
 ./mvnw -B -pl src/ledger/transactionhistory verify -Dtest='!*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false
 # Integration layer (needs Docker for Testcontainers)
 ./mvnw -B -pl src/ledger/transactionhistory verify -Dtest='*IntegrationTest'
-# Either layer with reports (JUnit XML, JaCoCo XML/HTML, maven.log, summary.md) in <out>
+# Either layer with reports (JUnit XML, JaCoCo XML + zipped HTML, maven.log, summary.md) in <out>
 bash src/ledger/transactionhistory/scripts/report-tests.sh unit <out>
 bash src/ledger/transactionhistory/scripts/report-tests.sh integration <out>
 # Dashboard evidence (suites are registered in tools/test-observability/config.json)

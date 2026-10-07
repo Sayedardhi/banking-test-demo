@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs one transactionhistory test layer and writes fresh reports to an output folder.
 #   usage: report-tests.sh <unit|integration> <output-dir>
-# Writes: junit/TEST-*.xml, jacoco.xml, jacoco-html/, maven.log, summary.md
+# Writes: junit/TEST-*.xml, jacoco.xml, jacoco-html.zip, maven.log, summary.md
 # Exit code: Maven's exit code, or 1 if any test failed/errored or zero tests were discovered.
 set -uo pipefail
 
@@ -18,7 +18,7 @@ esac
 
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
-rm -rf "$out/junit" "$out/jacoco.xml" "$out/jacoco-html" "$out/summary.md"
+rm -rf "$out/junit" "$out/jacoco.xml" "$out/jacoco-html.zip" "$out/summary.md"
 rm -rf "$svc_dir/target/surefire-reports" "$svc_dir/target/site/jacoco" "$svc_dir/target/jacoco.exec"
 
 (cd "$repo" && ./mvnw -B -pl src/ledger/transactionhistory verify \
@@ -30,7 +30,7 @@ mvn_rc=$?
 mkdir -p "$out/junit"
 cp "$svc_dir"/target/surefire-reports/TEST-*.xml "$out/junit/" 2>/dev/null || true
 cp "$svc_dir/target/site/jacoco/jacoco.xml" "$out/jacoco.xml" 2>/dev/null || true
-cp -r "$svc_dir/target/site/jacoco" "$out/jacoco-html" 2>/dev/null || true
+[ -d "$svc_dir/target/site/jacoco" ] && (cd "$svc_dir/target/site" && zip -qr "$out/jacoco-html.zip" jacoco)
 
 python3 - "$layer" "$out" "$mvn_rc" <<'PY'
 import glob, sys, xml.etree.ElementTree as ET
