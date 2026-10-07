@@ -1,0 +1,367 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# userservice test pipeline: pylint + import/collect checks, unit and PostgreSQL integration run in
+# parallel; Playwright journeys run against a source-built stack only when those prerequisites
+# produced valid results. Every suite runs once; the dashboard run is assembled from the same reports.
+name: "Tests: userservice"
+
+on:
+  pull_request:
+  push:
+    branches: [demo-baseline, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-userservice-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Playwright journeys from PR #10 (tests/e2e). Used only when the checkout has no tests/e2e.
+  E2E_SUITE_REF: 9c96622ccb4c45ef19bc5de793f704d1198657c4
+  REPORTS: ${{ github.workspace }}/reports
+  SERVICE_DIR: src/accounts/userservice
+  UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv-userservice
+
+jobs:
+  checks:
+    name: Pylint + compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/accounts/userservice/uv.lock
+      - name: Install dependencies (locked)
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: uv sync --frozen --group dev
+      - name: Pylint (existing repo .pylintrc, same scope as skaffold)
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          set -o pipefail
+          mkdir -p "$REPORTS/checks"
+          uv run --no-sync pylint --rcfile=../../../.pylintrc ./*.py | tee "$REPORTS/checks/pylint.txt"
+      - name: Byte-compile and collect tests
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          set -o pipefail
+          uv run --no-sync python -m compileall -q . -x '/\.venv'
+          uv run --no-sync python -m pytest --collect-only -q -p no:cacheprovider tests | tee "$REPORTS/checks/collect.txt"
+      - name: Upload check output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: userservice-checks
+          path: ${{ env.REPORTS }}/checks
+          if-no-files-found: warn
+
+  unit:
+    name: Unit (pytest, mocked UserDb)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/accounts/userservice/uv.lock
+      - name: Unit tests
+        id: tests
+        run: |
+          set +e
+          "$SERVICE_DIR/scripts/report-tests.sh" unit "$REPORTS/unit"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 "$SERVICE_DIR/scripts/summarize.py" --markdown unit="$REPORTS/unit" >> "$GITHUB_STEP_SUMMARY"
+          python3 "$SERVICE_DIR/scripts/summarize.py" --harness unit="$REPORTS/unit" >> "$GITHUB_OUTPUT"
+      - name: Upload unit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: userservice-unit-reports
+          path: ${{ env.REPORTS }}/unit
+          if-no-files-found: warn
+      - name: Fail on unit test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::userservice unit layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  integration:
+    name: Integration (Flask + Testcontainers PostgreSQL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/accounts/userservice/uv.lock
+      - name: Integration tests (postgres:16-alpine with accounts-db schema)
+        id: tests
+        run: |
+          set +e
+          "$SERVICE_DIR/scripts/report-tests.sh" integration "$REPORTS/integration"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 "$SERVICE_DIR/scripts/summarize.py" --markdown integration="$REPORTS/integration" >> "$GITHUB_STEP_SUMMARY"
+          python3 "$SERVICE_DIR/scripts/summarize.py" --harness integration="$REPORTS/integration" >> "$GITHUB_OUTPUT"
+      - name: Remove leftover test containers
+        if: always()
+        run: docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: userservice-integration-reports
+          path: ${{ env.REPORTS }}/integration
+          if-no-files-found: warn
+      - name: Fail on integration test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::userservice integration layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  e2e:
+    name: E2E (Playwright, source-built stack)
+    needs: [checks, unit, integration]
+    # Gate on valid prerequisite results: checks must pass and both service layers must have executed
+    # with reports. Known findings in those layers do not block the browser journeys.
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.unit.outputs.harness == 'ok' && needs.integration.outputs.harness == 'ok' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+    env:
+      E2E_BASE_URL: http://localhost:18080
+      AUDIT_URL: http://localhost:18090
+      AUDIT_TOKEN: local-demo-audit-token
+      MAVEN_MIRROR_URL: https://maven-central.storage-download.googleapis.com/maven2
+      COMPOSE: docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml
+      OUT: ${{ github.workspace }}/reports/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Playwright suite
+        run: |
+          if [ -f tests/e2e/package.json ]; then
+            echo "E2E_SUITE=tests/e2e from this checkout" >> "$GITHUB_ENV"
+          else
+            git fetch --no-tags --depth=1 origin "$E2E_SUITE_REF"
+            git checkout FETCH_HEAD -- tests/e2e
+            git reset -q
+            echo "E2E_SUITE=tests/e2e from $E2E_SUITE_REF (PR #10); application code from this checkout" >> "$GITHUB_ENV"
+          fi
+          mkdir -p "$OUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Discover tests (fails on zero)
+        working-directory: tests/e2e
+        run: |
+          n=$(npx playwright test --list | grep -cE '^\s+\[chromium\]' || true)
+          echo "Discovered $n Playwright tests"
+          echo "DISCOVERED=$n" >> "$GITHUB_ENV"
+          test "$n" -gt 0
+      - name: Build userservice and the banking stack from this checkout
+        run: |
+          mkdir -p .local/keys
+          openssl genrsa -out .local/keys/privatekey 2048
+          openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
+          if ! $COMPOSE up -d --build --wait --wait-timeout 900; then
+            $COMPOSE ps -a
+            for s in $($COMPOSE ps -a --status exited --format '{{.Service}}'); do
+              echo "::group::logs: $s"; $COMPOSE logs --no-color --tail 150 "$s"; echo "::endgroup::"
+            done
+            exit 1
+          fi
+          $COMPOSE images | tee "$OUT/stack-images.txt"
+      - name: Wait for service readiness
+        run: |
+          set -x
+          for url in "$E2E_BASE_URL/ready" "$E2E_BASE_URL/login" "$AUDIT_URL/health"; do
+            timeout 120 bash -c "until curl -fsS -o /dev/null '$url'; do sleep 2; done"
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$AUDIT_URL/events")" = 401
+          curl -fsS -o /dev/null -H "Authorization: Bearer $AUDIT_TOKEN" "$AUDIT_URL/events"
+          # Every application image, including userservice, must be built from this checkout.
+          images=$($COMPOSE ps -a --format '{{.Service}} {{.Image}}')
+          echo "$images"
+          grep -qx 'userservice banking-e2e/userservice:source' <<<"$images"
+          ! awk '{print $2}' <<<"$images" | grep -v '^banking-e2e/'
+      - name: Playwright journeys
+        id: tests
+        working-directory: tests/e2e
+        env:
+          E2E_STACK: existing
+        run: |
+          set +e
+          bash scripts/report-tests.sh "$OUT"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: E2E summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import os, xml.etree.ElementTree as ET
+          out = os.environ['OUT']
+          print('### userservice pipeline: Playwright journeys\n')
+          print(f"Suite: {os.environ.get('E2E_SUITE', '?')}. Discovered: {os.environ.get('DISCOVERED', '?')}.\n")
+          try:
+              cases = ET.parse(f'{out}/junit.xml').getroot().findall('.//testcase')
+              bad = [c.get('name') for c in cases if c.find('failure') is not None or c.find('error') is not None]
+              skipped = sum(c.find('skipped') is not None for c in cases)
+              print(f'Tests {len(cases)}, passed {len(cases) - len(bad) - skipped}, failed {len(bad)}, skipped {skipped}.')
+              for name in bad:
+                  print(f'- failed: {name}')
+          except Exception as ex:
+              print(f'No JUnit report ({type(ex).__name__}).')
+          PY
+      - name: Collect service logs and stop the stack
+        if: always()
+        run: |
+          [ -f tests/e2e/compose.source.yaml ] || exit 0
+          $COMPOSE ps -a > "$OUT/compose-ps.txt" 2>&1 || true
+          $COMPOSE logs --no-color > "$OUT/compose-logs.txt" 2>&1 || true
+          $COMPOSE logs --no-color userservice > "$OUT/userservice.log" 2>&1 || true
+          $COMPOSE down --remove-orphans || true
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-junit
+          path: reports/e2e/junit.xml
+          if-no-files-found: warn
+      - name: Upload Playwright HTML report, traces and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-report
+          path: |
+            reports/e2e/playwright-report.zip
+            reports/e2e/playwright-results.zip
+          if-no-files-found: warn
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-service-logs
+          path: |
+            reports/e2e/*.txt
+            reports/e2e/*.log
+          if-no-files-found: warn
+      - name: Fail on Playwright failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::Playwright exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  report:
+    name: Pipeline summary + dashboard run
+    needs: [checks, unit, integration, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.REPORTS }}
+      - name: Job summary by layer
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHECKS: ${{ needs.checks.result }}
+          UNIT: ${{ needs.unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          {
+            echo "## userservice pipeline"
+            echo
+            echo "| Stage | Job result | Reports |"
+            echo "|---|---|---|"
+            echo "| Pylint + compile | $CHECKS | [userservice-checks]($RUN_URL#artifacts) |"
+            echo "| Unit | $UNIT | [userservice-unit-reports]($RUN_URL#artifacts) |"
+            echo "| Integration | $INTEGRATION | [userservice-integration-reports]($RUN_URL#artifacts) |"
+            echo "| E2E (Playwright) | $E2E | [e2e-playwright-report, e2e-junit, e2e-service-logs]($RUN_URL#artifacts) |"
+            echo
+            python3 "$SERVICE_DIR/scripts/summarize.py" --markdown \
+              unit="$REPORTS/userservice-unit-reports" integration="$REPORTS/userservice-integration-reports"
+            echo
+            python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          path = os.path.join(os.environ['REPORTS'], 'e2e-junit', 'junit.xml')
+          try:
+              cases = ET.parse(path).getroot().findall('.//testcase')
+              bad = sum(c.find('failure') is not None or c.find('error') is not None for c in cases)
+              skipped = sum(c.find('skipped') is not None for c in cases)
+              print(f'E2E (Playwright): tests {len(cases)}, passed {len(cases) - bad - skipped}, failed {bad}, skipped {skipped}; coverage not measured (browser black-box).')
+          except OSError:
+              print('E2E: no JUnit report (job skipped or did not reach Playwright).')
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Dashboard-compatible run (from the reports above, no re-execution)
+        if: always()
+        run: |
+          mkdir -p "$REPORTS/e2e"
+          cp "$REPORTS"/e2e-junit/* "$REPORTS"/e2e-playwright-report/* "$REPORTS/e2e/" 2>/dev/null || true
+          id=$(python3 "$SERVICE_DIR/scripts/dashboard_run.py" \
+            "userservice:unit:${{ needs.unit.outputs.code || 'none' }}:$REPORTS/userservice-unit-reports" \
+            "userservice:integration:${{ needs.integration.outputs.code || 'none' }}:$REPORTS/userservice-integration-reports" \
+            "journeys:e2e:${{ needs.e2e.outputs.code || 'none' }}:$REPORTS/e2e")
+          echo "Dashboard run $id"
+          echo "Dashboard run \`$id\`: unzip into \`.local/test-observability/runs/\` and run \`dashboard.py serve\`." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload dashboard run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: userservice-dashboard-run
+          path: .local/test-observability/runs/
+          if-no-files-found: warn
+      - name: Final status (test failures stay visible)
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ['RESULTS'])
+          bad = {k: v['result'] for k, v in needs.items() if v['result'] != 'success'}
+          for k, v in bad.items():
+              print(f'::error::{k}: {v}')
+          sys.exit(1 if bad else 0)
+          PY
