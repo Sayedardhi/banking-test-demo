@@ -60,6 +60,7 @@ class BalanceCacheTest {
     @Test
     @DisplayName("No ledger rows (null sum) is cached as 0")
     void nullIsZero() throws Exception {
+        when(repository.findBalance("1011226111", ROUTING)).thenReturn(null);
         LoadingCache<String, Long> cache = balanceCache.initializeCache(10, ROUTING);
 
         assertThat(cache.get("1011226111")).isZero();
