@@ -1,0 +1,79 @@
+# userservice (authentication) tests: unit, then PostgreSQL integration.
+# Publishes per-layer counts and line/branch coverage to the job summary.
+name: test-userservice
+
+on:
+  push:
+    branches: [demo-baseline]
+    paths:
+      - 'src/accounts/userservice/**'
+      - 'src/accounts/accounts-db/initdb/**'
+      - '.github/workflows/test-userservice.yaml'
+  pull_request:
+    paths:
+      - 'src/accounts/userservice/**'
+      - 'src/accounts/accounts-db/initdb/**'
+      - '.github/workflows/test-userservice.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  userservice-tests:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      REPORTS: ${{ github.workspace }}/userservice-reports
+    defaults:
+      run:
+        working-directory: src/accounts/userservice
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies (uv.lock, Python from .python-version)
+        run: |
+          mkdir -p "$REPORTS"
+          uv sync --frozen
+
+      - name: Unit tests
+        id: unit
+        continue-on-error: true
+        run: bash scripts/report-tests.sh unit "$REPORTS/unit" 2>&1 | tee "$REPORTS/unit.log"
+
+      - name: Integration tests (SQLite UserDb + PostgreSQL 16 via Testcontainers)
+        id: integration
+        if: always()
+        continue-on-error: true
+        run: bash scripts/report-tests.sh integration "$REPORTS/integration" 2>&1 | tee "$REPORTS/integration.log"
+
+      - name: Combined service coverage
+        if: always()
+        continue-on-error: true
+        run: bash scripts/report-tests.sh combined "$REPORTS/combined" "$REPORTS/unit" "$REPORTS/integration"
+
+      - name: Job summary
+        id: summary
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 scripts/ci_summary.py unit="$REPORTS/unit" integration="$REPORTS/integration" \
+            --coverage-only combined="$REPORTS/combined" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: userservice-test-reports
+          path: userservice-reports/
+          if-no-files-found: warn
+
+      - name: Fail on test failures or zero discovered tests
+        if: always()
+        run: |
+          echo "unit=${{ steps.unit.outcome }} integration=${{ steps.integration.outcome }} summary=${{ steps.summary.outcome }}"
+          test "${{ steps.unit.outcome }}" = success
+          test "${{ steps.integration.outcome }}" = success
+          test "${{ steps.summary.outcome }}" = success

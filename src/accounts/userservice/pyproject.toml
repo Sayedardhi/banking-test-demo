@@ -71,6 +71,7 @@ dev = [
     "pylint>=3.0",
     "pytest>=7.4.4",
     "pytest-cov>=4.1.0",
+    "testcontainers[postgres]>=4.9",
 ]
 
 [tool.pytest.ini_options]
