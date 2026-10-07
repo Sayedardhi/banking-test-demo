@@ -1,0 +1,90 @@
+# Source-build overlay for the Playwright journeys:
+#   docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml up -d --build --wait
+# Every application and database image is built from this checkout and tagged
+# banking-e2e/<service>:source, so E2E runs exercise the revision under test, not the pinned
+# upstream v0.6.11 images. Ports move to 18080 (frontend) / 18090 (audit) and the project name
+# gives the stack its own volumes, so the local demo stack and its data are never touched.
+x-java-build: &java-build
+  dockerfile: ../../../tests/e2e/docker/java.Dockerfile
+  args:
+    MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-}
+x-java-health: &java-health
+  test: [CMD, curl, -fsS, -o, /dev/null, http://localhost:8080/ready]
+  interval: 5s
+  timeout: 3s
+  retries: 60
+  start_period: 20s
+x-python-health: &python-health
+  test: [CMD, python, -c, "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/ready', timeout=2).status == 200 else 1)"]
+  interval: 3s
+  timeout: 3s
+  retries: 40
+
+services:
+  accounts-db:
+    image: banking-e2e/accounts-db:source
+    build: ./src/accounts/accounts-db
+    pull_policy: build
+  ledger-db:
+    image: banking-e2e/ledger-db:source
+    build: ./src/ledger/ledger-db
+    pull_policy: build
+  userservice:
+    image: banking-e2e/userservice:source
+    build: ./src/accounts/userservice
+    pull_policy: build
+    healthcheck: *python-health
+  contacts:
+    image: banking-e2e/contacts:source
+    build: ./src/accounts/contacts
+    pull_policy: build
+    healthcheck: *python-health
+  ledgerwriter:
+    image: banking-e2e/ledgerwriter:source
+    build:
+      context: ./src/ledger/ledgerwriter
+      <<: *java-build
+    pull_policy: build
+    healthcheck: *java-health
+  balancereader:
+    image: banking-e2e/balancereader:source
+    build:
+      context: ./src/ledger/balancereader
+      <<: *java-build
+    pull_policy: build
+    healthcheck: *java-health
+  transactionhistory:
+    image: banking-e2e/transactionhistory:source
+    build:
+      context: ./src/ledger/transactionhistory
+      <<: *java-build
+    pull_policy: build
+    healthcheck: *java-health
+  audit:
+    image: banking-e2e/audit:source
+    build: ./src/audit
+    pull_policy: build
+    ports: !override
+    - 127.0.0.1:18090:8080
+  frontend:
+    image: banking-e2e/frontend:source
+    build: ./src/frontend
+    pull_policy: build
+    # The base file bind-mounts frontend.py/templates/static from ./src/frontend; the image is
+    # built from the same directory, so both come from this checkout.
+    ports: !override
+    - 127.0.0.1:18080:8080
+    healthcheck: *python-health
+    depends_on:
+      userservice:
+        condition: service_healthy
+      contacts:
+        condition: service_healthy
+      ledgerwriter:
+        condition: service_healthy
+      balancereader:
+        condition: service_healthy
+      transactionhistory:
+        condition: service_healthy
+      audit:
+        condition: service_healthy
