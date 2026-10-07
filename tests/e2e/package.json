@@ -1,0 +1,13 @@
+{
+  "name": "bank-of-anthos-e2e",
+  "private": true,
+  "description": "Playwright banking journeys that exercise ledgerwriter through the frontend",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.6.3"
+  }
+}
