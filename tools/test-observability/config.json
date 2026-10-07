@@ -8,5 +8,8 @@
     {"id":"transactionhistory","name":"Transaction history","language":"Java","path":"src/ledger/transactionhistory","runner":"java","tests":"src/test/java/**/*Test.java"},
     {"id":"frontend","name":"Customer experience","language":"Python","path":"src/frontend","runner":null,"tests":"tests/**/*"}
   ],
-  "suites": []
+  "suites": [
+    {"service":"ledgerwriter","layer":"unit","cwd":".","command":["bash","src/ledger/ledgerwriter/scripts/report-tests.sh","unit","{output}"],"junit":["TEST-*.xml"],"coverage":"jacoco.xml"},
+    {"service":"ledgerwriter","layer":"integration","cwd":".","command":["bash","src/ledger/ledgerwriter/scripts/report-tests.sh","integration","{output}"],"junit":["TEST-*.xml"],"coverage":"jacoco.xml"}
+  ]
 }
