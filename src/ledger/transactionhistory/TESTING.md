@@ -45,9 +45,28 @@ Dashboard: suites are registered in `tools/test-observability/config.json`
 |---|---|---|---|
 | Baseline (`demo-baseline` 3580550, 8 existing tests) | 8 unit, no integration/E2E harness | 35/189 (18.5%) | 7/46 (15.2%) |
 | Unit (this branch) | 45 (43 pass, 2 findings) | 145/189 (76.7%) | 35/46 (76.1%) |
-| Integration (this branch) | 10 (8 pass, 2 findings) | 161/189 (85.2%) | 33/46 (71.7%) |
+| Integration (this branch) | 10 (8 pass, 2 findings) | 159-161/189 (84.1-85.2%) across 4 runs | 33/46 (71.7%) |
+| E2E (pinned journeys, source-built stack) | 9 (9 pass) | not measured (Java coverage not collected in containers) | - |
 
-The layers' coverage is reported per layer and is not merged or averaged.
+The layers' coverage is reported per layer and is not merged or averaged. Integration line coverage
+varies by up to 2 lines between runs because whether `LedgerReader` hits its retry/log paths depends on
+poll timing; the pass/fail set was identical across 4 runs.
+
+## Fault checks
+
+Each fault was applied to one line of production code, the unit layer was run, and the source was
+restored with `git checkout` (none are committed).
+
+| Fault | Caught by |
+|---|---|
+| Account check in `getTransactions` disabled | `otherAccountRejected`, `nearMatchAccountRejected`, `tokenWithoutAccountClaimRejected` |
+| Cache-load failure returns 200 instead of 500 | `ledgerOutageReturns500` |
+| Recipient routing check removed in cache update | `externalRoutingWithSameAccountNumberIgnored` |
+| `HISTORY_LIMIT` off by one | `historyLimitDropsOldest` |
+| Cache loads with the wrong routing number | `loadsFromLedgerWithLocalRoutingAndHistoryLimit`, `ownerGetsHistory` |
+| Reader keeps running after the ledger head moves back | `ledgerHeadBehindReaderStopsThread` (+5 reader tests) |
+| Reader skips one id after each delivery | `resumesAfterLastDeliveredId`, `deliversOnlyRowsAfterStartupHead`, `transientOutageWhilePolling` |
+| Cents divided by 10 instead of 100 | `toStringFormatsCentsAsDollars`, `toStringBoundaryAmounts` |
 
 ## Findings (tests intentionally left failing)
 
