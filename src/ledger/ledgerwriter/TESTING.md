@@ -35,9 +35,20 @@ or zero discovered tests. Set `MVN=/path/to/mvn` to use a local Maven instead of
 Requirements: JDK 17, Docker (integration only), Python 3 (summary). Surefire sets
 `HOSTNAME=ledgerwriter-test` and `ENABLE_METRICS=false`, which the Spring context needs to start.
 
-CI: `.github/workflows/test-ledgerwriter.yaml` runs unit then integration, writes per-layer counts and
-line/branch coverage to the job summary, and uploads `ledgerwriter-unit-reports` and
-`ledgerwriter-integration-reports` even on failure.
+## CI pipeline (`.github/workflows/test-ledgerwriter.yaml`)
+
+Runs on pull requests, pushes to `demo-baseline` and `main`, and `workflow_dispatch`.
+
+| Job | Runs | Notes |
+| --- | --- | --- |
+| `checks` | `./mvnw -B -pl src/ledger/ledgerwriter checkstyle:check`, then `test-compile` | Existing `checkstyle.xml`; uploads `ledgerwriter-checkstyle` |
+| `unit` | `report-tests.sh unit` | Parallel with `checks`/`integration`; uploads `ledgerwriter-unit-reports` (JUnit, `jacoco.xml`, JaCoCo HTML) |
+| `integration` | `report-tests.sh integration` | Testcontainers PostgreSQL, one container per test class, leftovers removed with `if: always()`; uploads `ledgerwriter-integration-reports` |
+| `e2e` | Builds the whole stack (ledgerwriter included) from the checkout with `tests/e2e/compose.source.yaml`, waits for readiness, runs Playwright | Gated: `checks` must pass and both service layers must have executed with reports (known findings do not block it). Uses `tests/e2e` from the checkout, or the PR #10 suite pinned in `E2E_SUITE_REF` when the checkout has none. Uploads `e2e-junit`, `e2e-playwright-report` (HTML + traces/screenshots/videos), `e2e-service-logs`; stack is stopped with `docker compose down` even on failure |
+| `report` | Job summary by layer with artifact links; `scripts/dashboard_run.py` packages the same reports as a dashboard run | Uploads `ledgerwriter-dashboard-run`; fails if any job did not succeed, so test failures stay visible |
+
+Each suite runs once. To view a CI run in the dashboard, unzip `ledgerwriter-dashboard-run` into
+`.local/test-observability/runs/` and run `python3 tools/test-observability/dashboard.py serve`.
 
 ## Coverage scope
 
@@ -46,8 +57,8 @@ Boot application class), per layer. Coverage is not merged across layers or aver
 
 ## Limitations
 
-- Docker Compose runs a prebuilt upstream ledgerwriter image, so browser/E2E journeys do not exercise
-  changes made on a branch. These tests run the checked-out source.
+- The default `compose.yaml` runs a prebuilt upstream ledgerwriter image; only the CI `e2e` job (via
+  `tests/e2e/compose.source.yaml`) exercises branch changes in the browser journeys.
 - balancereader is substituted in both layers; real cross-service balance consistency is not covered here.
 - Tests that encode a documented requirement the current code does not meet are kept failing on purpose
   (see the PR "Findings"); they are not skipped.

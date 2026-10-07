@@ -4,6 +4,8 @@
 Usage: summarize.py [--check] [--markdown] layer=dir [layer=dir ...]
 --check exits 1 if any layer has failures/errors, no tests, or missing reports.
 --markdown prints a GitHub step-summary table instead of plain text.
+--harness prints harness=ok when every layer executed tests and produced coverage
+(test failures allowed), else harness=broken; used to gate the E2E job.
 """
 import glob
 import os
@@ -46,6 +48,7 @@ def fmt(pair):
 def main(argv):
     check = "--check" in argv
     markdown = "--markdown" in argv
+    harness = "--harness" in argv
     layers = [a.split("=", 1) for a in argv if "=" in a]
     ok = True
     rows = []
@@ -61,6 +64,10 @@ def main(argv):
             problem = (problem + "; " if problem else "") + "coverage report missing"
         ok = ok and not problem
         rows.append((layer, tests, cov, problem))
+    if harness:
+        ran = all(t["tests"] > 0 and cov for _, t, cov, _ in rows)
+        print("harness=" + ("ok" if rows and ran else "broken"))
+        return 0
     if markdown:
         print("### ledgerwriter test results\n")
         print("| Layer | Tests | Passed | Failed | Skipped | Line coverage (covered/total) | Branch coverage (covered/total) | Status |")
