@@ -1,0 +1,19 @@
+# Test override: run ledgerwriter from this checkout instead of the pinned
+# prebuilt image. The jar is built by scripts/test-ledgerwriter.sh, which
+# copies it to .local/ledgerwriter-source/ledgerwriter.jar.
+#
+#   docker compose -f compose.yaml -f compose.ledgerwriter-source.yaml up -d --wait
+services:
+  ledgerwriter:
+    image: eclipse-temurin:17-jre@sha256:207ecae0b2b104dfc6dfa763d1e9cd2041cb344800a180e24cb1a28ed533ff90
+    command: ["java", "-jar", "/opt/ledgerwriter/ledgerwriter.jar"]
+    environment:
+      VERSION: ${LEDGERWRITER_SOURCE_VERSION:-source-local}
+    volumes:
+    - ./.local/ledgerwriter-source:/opt/ledgerwriter:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
