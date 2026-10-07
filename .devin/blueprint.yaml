@@ -1,0 +1,18 @@
+# https://docs.devin.ai/onboard-devin/environment-yaml
+# One-time setup (e.g., install system tools, global CLIs).
+initialize: |
+  echo '{ "dns-opts": ["single-request-reopen"], "registry-mirrors": ["https://mirror.gcr.io"] }' | sudo tee /etc/docker/daemon.json
+  sudo systemctl restart docker
+# Install project dependencies (runs during builds, surfaced to agent at session start).
+maintenance: |
+  git fetch origin demo-baseline
+  git checkout -B demo-baseline origin/demo-baseline
+  docker compose pull -q --ignore-buildable
+  docker compose build -q audit
+knowledge:
+  - name: startup
+    contents: |
+      ./scripts/start-local.sh  # frontend http://localhost:8080 (testuser / bankofanthos), audit API http://localhost:8090 (Bearer local-demo-audit-token); Java services take ~30s
+  - name: notes
+    contents: |
+      Work on the demo-baseline branch (tests intentionally removed; see DEMO-BASELINE.md; don't restore them from demo-reference). Stop with `docker compose down`. No pre-commit hooks in repo.
