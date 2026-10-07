@@ -69,4 +69,19 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pylint>=3.0",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "testcontainers[postgres]>=4.9",
 ]
+
+[tool.pytest.ini_options]
+# contacts/ is itself a package (__init__.py) and contacts.py imports `from db import ...`;
+# importlib mode plus this directory on sys.path imports contacts.py as the `contacts` module.
+addopts = "--import-mode=importlib"
+pythonpath = [".", "tests"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", "scripts/*", ".venv/*"]
