@@ -1,0 +1,72 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Tests: ledgerwriter"
+
+on:
+  pull_request:
+    paths:
+      - "src/ledger/ledgerwriter/**"
+      - "src/ledger/ledger-db/initdb/**"
+      - ".github/workflows/test-ledgerwriter.yaml"
+  push:
+    branches: [demo-baseline]
+    paths:
+      - "src/ledger/ledgerwriter/**"
+      - "src/ledger/ledger-db/initdb/**"
+      - ".github/workflows/test-ledgerwriter.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ledgerwriter:
+    name: ledgerwriter unit + integration
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Unit tests (JUnit/Mockito, no Spring context)
+        id: unit
+        run: src/ledger/ledgerwriter/scripts/report-tests.sh unit "$RUNNER_TEMP/ledgerwriter/unit"
+      - name: Integration tests (Spring Boot + Testcontainers Postgres)
+        id: integration
+        if: ${{ !cancelled() }}
+        run: src/ledger/ledgerwriter/scripts/report-tests.sh integration "$RUNNER_TEMP/ledgerwriter/integration"
+      - name: Job summary
+        if: ${{ !cancelled() }}
+        run: |
+          python3 src/ledger/ledgerwriter/scripts/summarize.py --markdown \
+            unit="$RUNNER_TEMP/ledgerwriter/unit" \
+            integration="$RUNNER_TEMP/ledgerwriter/integration" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledgerwriter-unit-reports
+          path: ${{ runner.temp }}/ledgerwriter/unit
+          if-no-files-found: warn
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledgerwriter-integration-reports
+          path: ${{ runner.temp }}/ledgerwriter/integration
+          if-no-files-found: warn
