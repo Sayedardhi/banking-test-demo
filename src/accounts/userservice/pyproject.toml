@@ -71,7 +71,15 @@ dev = [
     "pylint>=3.0",
     "pytest>=7.4.4",
     "pytest-cov>=4.1.0",
+    "testcontainers[postgres]>=4.8",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+junit_family = "xunit2"
+
+# Coverage scope: every production module in the service (including unimported ones), tests excluded.
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", "scripts/*"]
