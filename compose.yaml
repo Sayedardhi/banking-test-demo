@@ -24,6 +24,7 @@ services:
       ENABLE_METRICS: 'false'
       LOG_LEVEL: info
       NAMESPACE: local
+      JAVA_TOOL_OPTIONS: -XX:TieredStopAtLevel=1 -Xms128m -Xmx512m
     volumes:
     - ./.local/keys:/tmp/.ssh:ro
     depends_on:
@@ -78,6 +79,7 @@ services:
       HISTORY_LIMIT: '100'
       LOG_LEVEL: info
       NAMESPACE: local
+      JAVA_TOOL_OPTIONS: -XX:TieredStopAtLevel=1 -Xms128m -Xmx512m
     volumes:
     - ./.local/keys:/tmp/.ssh:ro
     depends_on:
@@ -164,6 +166,7 @@ services:
       CACHE_SIZE: '1000000'
       LOG_LEVEL: info
       NAMESPACE: local
+      JAVA_TOOL_OPTIONS: -XX:TieredStopAtLevel=1 -Xms128m -Xmx512m
     volumes:
     - ./.local/keys:/tmp/.ssh:ro
     depends_on:
