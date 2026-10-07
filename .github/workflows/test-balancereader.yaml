@@ -1,0 +1,88 @@
+name: test-balancereader
+
+on:
+  pull_request:
+    paths:
+      - "src/ledger/balancereader/**"
+      - "src/ledger/ledger-db/initdb/**"
+      - ".github/workflows/test-balancereader.yaml"
+  push:
+    branches: [demo-baseline]
+    paths:
+      - "src/ledger/balancereader/**"
+      - "src/ledger/ledger-db/initdb/**"
+      - ".github/workflows/test-balancereader.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  balancereader-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REPORTS: ${{ github.workspace }}/balancereader-reports
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Unit tests
+        id: unit
+        run: bash src/ledger/balancereader/scripts/report-tests.sh unit "$REPORTS/unit"
+
+      - name: Integration tests (Testcontainers PostgreSQL + ledger-db schema)
+        id: integration
+        if: always()
+        run: bash src/ledger/balancereader/scripts/report-tests.sh integration "$REPORTS/integration"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## balancereader tests"
+            echo
+            for layer in unit integration; do
+              if [ -f "$REPORTS/$layer/summary.md" ]; then
+                cat "$REPORTS/$layer/summary.md"
+              else
+                echo "**$layer: no report produced (step did not run or crashed before reporting).**"
+              fi
+              echo
+            done
+            echo "Unit outcome: \`${{ steps.unit.outcome }}\` · Integration outcome: \`${{ steps.integration.outcome }}\`"
+            echo
+            echo "Coverage is per layer for src/ledger/balancereader production classes only (JaCoCo); it is not averaged across services."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balancereader-junit
+          path: balancereader-reports/*/junit/
+          if-no-files-found: warn
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balancereader-coverage
+          path: |
+            balancereader-reports/*/jacoco.xml
+            src/ledger/balancereader/target/site/jacoco/
+          if-no-files-found: warn
+
+      - name: Upload summaries and Maven logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balancereader-test-report
+          path: |
+            balancereader-reports/*/summary.md
+            balancereader-reports/*/maven.log
+          if-no-files-found: warn
