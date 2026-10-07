@@ -154,6 +154,8 @@ jobs:
       code: ${{ steps.contacts.outputs.code }}
       journeys: ${{ steps.journeys.outputs.code }}
     env:
+      E2E_VIDEO: 'on'
+      E2E_TRACE: 'on'
       E2E_BASE_URL: http://localhost:18080
       AUDIT_URL: http://localhost:18090
       AUDIT_TOKEN: local-demo-audit-token
