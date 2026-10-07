@@ -53,6 +53,7 @@ class TransactionHistoryDatabaseOutageIntegrationTest {
     private static final String ALICE = "5000000001";
     private static final String BOB = "5000000002";
     private static final String UNCACHED = "5000000003";
+    private static final String SENTINEL = "5000000009";
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -89,12 +90,25 @@ class TransactionHistoryDatabaseOutageIntegrationTest {
             String.class);
     }
 
+    private void insert(String from, String to, int amount) {
+        jdbc.update("INSERT INTO TRANSACTIONS (FROM_ACCT, FROM_ROUTE, TO_ACCT, TO_ROUTE, AMOUNT, TIMESTAMP) "
+            + "VALUES (?, ?, ?, ?, ?, ?)", from, LOCAL_ROUTING, to, LOCAL_ROUTING, amount,
+            Timestamp.from(Instant.parse("2026-01-15T10:00:00Z")));
+    }
+
     @Test
     @DisplayName("Ledger DB outage: cached history still served, uncached read returns 500 'cache error'")
-    void ledgerOutage() {
-        jdbc.update("INSERT INTO TRANSACTIONS (FROM_ACCT, FROM_ROUTE, TO_ACCT, TO_ROUTE, AMOUNT, TIMESTAMP) "
-            + "VALUES (?, ?, ?, ?, ?, ?)", BOB, LOCAL_ROUTING, ALICE, LOCAL_ROUTING, 4200,
-            Timestamp.from(Instant.parse("2026-01-15T10:00:00Z")));
+    void ledgerOutage() throws Exception {
+        assertThat(history(SENTINEL).getBody()).isEqualTo("[]");
+        insert(BOB, ALICE, 4200);
+        insert(BOB, SENTINEL, 1);
+        // Rows stream in id order: once the sentinel row is cached, the LedgerReader is caught up.
+        long deadline = System.nanoTime() + 15_000_000_000L;
+        while (!history(SENTINEL).getBody().contains("\"amount\":1") && System.nanoTime() < deadline) {
+            Thread.sleep(50);
+        }
+        assertThat(history(SENTINEL).getBody()).contains("\"amount\":1");
+
         ResponseEntity<String> warm = history(ALICE);
         assertThat(warm.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(warm.getBody()).contains("\"amount\":4200");

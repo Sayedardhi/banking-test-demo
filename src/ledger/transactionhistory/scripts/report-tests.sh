@@ -40,6 +40,11 @@ for path in glob.glob(f"{out}/junit/TEST-*.xml"):
     r = ET.parse(path).getroot()
     t += int(r.get("tests", 0)); f += int(r.get("failures", 0))
     e += int(r.get("errors", 0)); s += int(r.get("skipped", 0))
+    for tc in r.iter("testcase"):
+        bad = tc.find("failure") if tc.find("failure") is not None else tc.find("error")
+        if bad is not None:
+            msg = " ".join((bad.get("message") or bad.get("type") or "").split())[:300]
+            print(f"FAILED {tc.get('classname', '').rsplit('.', 1)[-1]}.{tc.get('name')}: {msg}")
 cov = {}
 try:
     root = ET.parse(f"{out}/jacoco.xml").getroot()
