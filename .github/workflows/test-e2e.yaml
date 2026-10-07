@@ -70,7 +70,10 @@ jobs:
         test "$(curl -s -o /dev/null -w '%{http_code}' "$AUDIT_URL/events")" = 401
         curl -fsS -o /dev/null -H "Authorization: Bearer $AUDIT_TOKEN" "$AUDIT_URL/events"
         # Every application image must be the locally built source image, not an upstream pin.
-        ! $COMPOSE images --format '{{.Repository}}' | grep -v '^banking-e2e/'
+        images=$($COMPOSE ps -a --format '{{.Image}}')
+        echo "$images"
+        test -n "$images"
+        ! grep -v '^banking-e2e/' <<<"$images"
     - name: Playwright journeys
       working-directory: tests/e2e
       env:
