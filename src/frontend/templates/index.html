@@ -48,79 +48,31 @@ limitations under the License.
       </div>
     {% endif %}
 
-      <!-- Top row - overview, account # -->
-      <div class="row col-lg-12 align-items-start top-row">
-        <div class="col-md-8">
-          <small class="text-uppercase text-muted secondary-text">Overview</small>
-          <h2 class="header-title">Checking Account</h2>
+      <section class="overview-heading">
+        <div><p class="eyebrow">YOUR EVERYDAY BANKING</p><h1>Account overview</h1><p class="muted">A clear view of your money, all in one place.</p></div>
+        <span class="demo-badge"><span></span> Demo environment</span>
+      </section>
+      <section class="account-grid" aria-label="Account summary and actions">
+        <div class="balance-card">
+          <div class="balance-top"><span>Checking Account</span><span class="material-icons" aria-hidden="true">account_balance_wallet</span></div>
+          <p class="balance-label">Current balance</p>
+          <div id="current-balance">{{ format_currency(balance) }}</div>
+          <div class="balance-bottom"><span>Account number <strong>{{ account_id }}</strong></span><span>USD</span></div>
         </div>
-
-        <div class="col-md-4 account-info text-right">
-            <p>
-              <span class="account-overview account-icon material-icons">info</span>
-              <span class="account-num-text">Account Number:</span><span class="account-number">{{ account_id }}</span>
-            </p>
+        <div class="quick-actions"><p class="eyebrow">MOVE MONEY</p>
+          <button type="button" class="action-card deposit-send-button" data-toggle="modal" data-target="#sendPayment" data-keyboard="false" data-backdrop="static">
+            <span class="action-icon material-icons" aria-hidden="true">north_east</span><span><strong id="paymentSpan">Send Payment</strong><small>Transfer to a saved or new recipient</small></span><span class="action-arrow" aria-hidden="true">→</span>
+          </button>
+          <button type="button" class="action-card deposit-send-button" data-toggle="modal" data-target="#depositFunds" data-keyboard="false" data-backdrop="static">
+            <span class="action-icon material-icons" aria-hidden="true">south_west</span><span><strong id="depositSpan">Deposit Funds</strong><small>Add money from an external account</small></span><span class="action-arrow" aria-hidden="true">→</span>
+          </button>
         </div>
-    </div>
-
-    <!-- Balance / Deposit / Send Payment row -->
-    <div class="row col-lg-12 align-items-start">
-      <div class="col-lg-4">
-          <div class="card">
-            <div class="card-body">
-              <div class="row align-items-start">
-                <div class="col">
-                  <p class="text-uppercase mb-3">
-                    <b class="current-balance">Current Balance</b>
-                  </p>
-                  <span class="h1 mb-0" id="current-balance">
-                    {{ format_currency(balance) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-        </div>
-      </div>
-
-      <!-- Buttons -->
-      <div class="col-lg-4 deposit-send-payment-div">
-        <div class="card card-button deposit-send-button" data-toggle="modal" data-target="#depositFunds" data-keyboard="false" data-backdrop="static">
-          <div class="card-body">
-            <div class="row align-items-start">
-              <div class="col">
-                <span class="h5 mb-0" id="depositSpan">
-                  Deposit Funds
-                </span>
-              </div>
-              <div class="button-icon col-auto">
-                <span class="material-icons" id="deposit-icon">get_app</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-4 deposit-send-payment-div">
-        <div class="card card-button deposit-send-button" data-toggle="modal" data-target="#sendPayment" data-keyboard="false" data-backdrop="static">
-          <div class="card-body">
-            <div class="row align-items-start">
-              <div class="col">
-                <span class="h5 mb-0" id="paymentSpan">
-                  Send Payment
-                </span>
-              </div>
-              <div class="button-icon col-auto">
-                <span class="material-icons" id="payment-icon">forward</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      </section>
       <!-- Transaction History Table -->
-      <div class="row col-lg-12 mb-4 align-items-start">
+      <div class="row mb-4 align-items-start">
         <div class="col-lg-12">
-          <div class="card" class="transaction-card">
-            <div class="card-table-header">
+          <div class="card transaction-card">
+            <div class="card-table-header"><p class="eyebrow">ACCOUNT ACTIVITY</p>
               <div class="row align-items-start">
                 <div class="col">
                   <h4 class="card-header-title">
@@ -163,7 +115,7 @@ limitations under the License.
                     </td>
                     {% if t.toAccountNum == account_id %}
                       <td class="transaction-type">
-                        <span class="text-debit">●</span> Credit
+                        <span class="type-badge credit">↙ Credit</span>
                       </td>
                       <td class="transaction-account">
                         {{ t.fromAccountNum }}
@@ -172,7 +124,7 @@ limitations under the License.
                         {% if t.accountLabel != None %}
                           {{ t.accountLabel }}
                         {% else %}
-                          <span class="transaction-label-none">None</span>
+                          <span class="transaction-label-none">—</span>
                         {% endif %}
                       </td>
                       <td class="transaction-amount transaction-amount-credit">
@@ -180,7 +132,7 @@ limitations under the License.
                       </td>
                     {% elif t.fromAccountNum == account_id %}
                       <td class="transaction-type">
-                        <span class="text-credit">●</span> Debit
+                        <span class="type-badge debit">↗ Debit</span>
                       </td>
                       <td class="transaction-account">
                         {{ t.toAccountNum }}
@@ -189,7 +141,7 @@ limitations under the License.
                         {% if t.accountLabel != None %}
                           {{ t.accountLabel }}
                         {% else %}
-                          <span class="transaction-label-none">None</span>
+                          <span class="transaction-label-none">—</span>
                         {% endif %}
                       </td>
                       <td class="transaction-amount transaction-amount-debit">
@@ -207,12 +159,12 @@ limitations under the License.
       </div>
 
       <!-- Deposit Modal -->
-      <div class="modal fade" id="depositFunds" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal fade" id="depositFunds" aria-labelledby="deposit-title" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
           <div class="modal-content">
             <form id="deposit-form" class="needs-validation" novalidate="" method="POST" action="/deposit">
               <div class="modal-header">
-                <h3 class="modal-title header-title" id="exampleModalLongTitle">Make a Deposit</h3>
+                <h3 class="modal-title header-title" id="deposit-title">Make a Deposit</h3>
                 <button type="button" class="close deposit-cancel" data-dismiss="modal" aria-label="Close">
                   <span aria-hidden="true">&times;</span>
                 </button>
@@ -296,12 +248,12 @@ limitations under the License.
       </div>
 
       <!-- Send Modal -->
-      <div class="modal fade" id="sendPayment" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal fade" id="sendPayment" aria-labelledby="payment-title" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
           <div class="modal-content">
             <form id="payment-form" class="needs-validation" novalidate="" method="POST" action="/payment">
               <div class="modal-header">
-                <h3 class="modal-title header-title" id="exampleModalLongTitle">Send a Payment</h3>
+                <h3 class="modal-title header-title" id="payment-title">Send a Payment</h3>
                 <button type="button" class="close payment-cancel" data-dismiss="modal" aria-label="Close">
                   <span aria-hidden="true">&times;</span>
                 </button>

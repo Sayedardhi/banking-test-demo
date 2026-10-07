@@ -22,7 +22,7 @@ limitations under the License.
 {% include 'shared/platform_banner.html' %}
 {% include 'shared/navigation.html' %}
     <!-- Main Content -->
-    <main class="container">
+    <main class="container signup-page">
       <!-- Header -->
       <div class="row d-flex align-items-end header header-body">
         <div class="col-lg-4"><a href="/login" type="button" class="btn btn-secondary"><span class="mr-2 material-icons arrow-back">arrow_back</span>Back</a></div>
@@ -42,7 +42,7 @@ limitations under the License.
                       <span class="alert-icon mr-2 material-icons error-icon">error</span>Passwords don't match. Please try again.
                     </div>
                     <div class="mb-5">
-                      <label class="text-uppercase text-muted secondary-text" for="username">Username</label>
+                      <label class="text-uppercase text-muted secondary-text" for="signup-username">Username</label>
                       <div class="input-group mt-2 mb-5">
                         <div class="input-group-prepend mr-2">
                           <span class="input-group-text"><span class="material-icons">account_circle</span></span>
@@ -55,7 +55,7 @@ limitations under the License.
                     </div>
 
                     <div class="mb-5">
-                      <label class="text-uppercase text-muted secondary-text" for="password">Password</label>
+                      <label class="text-uppercase text-muted secondary-text" for="signup-password">Password</label>
                       <div class="input-group mt-2 mb-5">
                         <div class="input-group-prepend mr-2">
                           <span class="input-group-text"><span class="material-icons">lock</span></span>
@@ -68,7 +68,7 @@ limitations under the License.
                     </div>
 
                     <div class="mb-5">
-                      <label class="text-uppercase text-muted secondary-text" for="password-repeat">Confirm Password</label>
+                      <label class="text-uppercase text-muted secondary-text" for="signup-password-repeat">Confirm Password</label>
                       <div class="input-group mt-2 mb-5">
                         <div class="input-group-prepend mr-2">
                           <span class="input-group-text"><span class="material-icons">lock</span></span>
@@ -85,14 +85,14 @@ limitations under the License.
 
                     <div class="row mb-5">
                       <div class="col-md-6">
-                        <label class="text-uppercase text-muted secondary-text" for="firstname">First name</label>
+                        <label class="text-uppercase text-muted secondary-text" for="signup-firstname">First name</label>
                         <input type="text" class="form-control" id="signup-firstname" name="firstname" required>
                         <div class="invalid-feedback">
                           Valid first name is required.
                         </div>
                       </div>
                       <div class="col-md-6">
-                        <label class="text-uppercase text-muted secondary-text" for="lastname">Last name</label>
+                        <label class="text-uppercase text-muted secondary-text" for="signup-lastname">Last name</label>
                         <input type="text" class="form-control" id="signup-lastname" name="lastname" required>
                         <div class="invalid-feedback">
                           Valid last name is required.
@@ -189,14 +189,14 @@ limitations under the License.
 
                     <div class="row mb-5">
                       <div class="col-md-6">
-                        <label class="text-uppercase text-muted secondary-text" for="social">SSN</label>
+                        <label class="text-uppercase text-muted secondary-text" for="ssn">SSN</label>
                         <input type="text" class="form-control" id="ssn" name="ssn" value="111-22-3333" readonly>
                         <div class="invalid-feedback">
                           Valid SSN is required.
                         </div>
                       </div>
                       <div class="col-md-6">
-                        <label class="text-uppercase text-muted secondary-text" for="birthday">Birthday</label>
+                        <label class="text-uppercase text-muted secondary-text" for="signup-birthday">Birthday</label>
                         <input type="date" class="form-control" id="signup-birthday" name="birthday"  min="1900-01-01" required>
                         <div class="invalid-feedback">
                           Valid birthday is required.

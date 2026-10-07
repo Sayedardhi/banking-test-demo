@@ -22,9 +22,9 @@ limitations under the License.
 {% include 'shared/platform_banner.html' %}
 {% include 'shared/navigation.html' %}
     <!-- Main Content -->
-    <main class="container">
+    <main class="container login-page">
       <!-- Sign-in card -->
-      <div class="row mt-5 mb-5">
+      <div class="row mt-5 mb-5 align-items-center">
         <!-- Alert on load -->
         {% if message != None and message != 'Login Failed' %}
         <div class="col-md-8 offset-md-2">
@@ -36,12 +36,13 @@ limitations under the License.
           </div>
         </div>
         {% endif %}
-        <div class="col-lg-6 offset-lg-3">
+        <section class="col-lg-6 login-intro"><p class="eyebrow">BANKING, SIMPLIFIED</p><h1>Your money.<br>Your next move.</h1><p>Check your balance, move money, and keep track of the everyday.</p><div class="intro-detail"><span class="material-icons" aria-hidden="true">account_balance</span><span>A simpler way to stay connected<br>to your accounts.</span></div></section>
+        <div class="col-lg-5 offset-lg-1">
           <div class="card">
             <div class="card-title header-body">
               <div class="text-center col-10 offset-1">
-                <p class="text-uppercase text-muted secondary-text">Welcome</p>
-                <h2 class="mb-4 header-title">SIGN IN</h2>
+                <p class="text-uppercase text-muted secondary-text">YOUR ACCOUNT</p>
+                <h2 class="mb-4 header-title">Welcome back</h2>
               </div>
             </div>
             <div class="card-body sign-in">
@@ -55,7 +56,7 @@ limitations under the License.
                   {% else %}
                   <form id="login-form" class="needs-validation" novalidate="" method="POST" action="/login">
                   {% endif %}
-                    <label class="text-uppercase text-muted secondary-text" for="username">Username</label>
+                    <label class="text-uppercase text-muted secondary-text" for="login-username">Username</label>
                     <div class="input-group mt-2d mb-5">
                       <div class="input-group-prepend mr-2">
                         <span class="input-group-text"><span class="material-icons">account_circle</span></span>
@@ -65,7 +66,7 @@ limitations under the License.
                         Please enter your username.
                       </div>
                     </div>
-                    <label class="text-uppercase text-muted secondary-text" for="password">Password</label>
+                    <label class="text-uppercase text-muted secondary-text" for="login-password">Password</label>
                     <div class="input-group mt-2 mb-5">
                       <div class="input-group-prepend mr-2">
                         <span class="input-group-text"><span class="material-icons">lock</span></span>

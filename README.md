@@ -37,3 +37,7 @@ Keep the original tests as references, derive acceptance criteria from them, and
 ## Attribution
 
 Adapted from [Bank of Anthos](https://github.com/GoogleCloudPlatform/bank-of-anthos), copyright Google LLC and contributors, under the Apache License 2.0. Original license and source notices are retained. Local modifications add Compose startup and neutral presentation. See [LICENSE](LICENSE). Existing upstream cloud deployment documentation remains available in `docs/` as reference.
+
+## Frontend styling
+
+The local demo uses a custom responsive theme on the existing Bootstrap Material Design components. Templates and static assets are mounted from this checkout; restart the frontend after template edits. Login, registration, payment, and deposit keep the original service routes and form IDs. The existing Bootstrap, jQuery, and Popper versions are vendored under `src/frontend/static/vendor/` with their original license notices and SHA-384 integrity checks. Material Icons still loads from Google Fonts.

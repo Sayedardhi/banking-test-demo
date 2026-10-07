@@ -139,6 +139,7 @@ services:
     volumes:
     - ./.local/keys:/tmp/.ssh:ro
     - ./src/frontend/templates:/app/templates:ro
+    - ./src/frontend/static:/app/static:ro
     depends_on:
       accounts-db:
         condition: service_healthy
