@@ -8,5 +8,8 @@
     {"id":"transactionhistory","name":"Transaction history","language":"Java","path":"src/ledger/transactionhistory","runner":"java","tests":"src/test/java/**/*Test.java"},
     {"id":"frontend","name":"Customer experience","language":"Python","path":"src/frontend","runner":null,"tests":"tests/**/*"}
   ],
-  "suites": []
+  "suites": [
+    {"service":"contacts","layer":"unit","cwd":"src/accounts/contacts","command":["bash","scripts/report-tests.sh","unit","{output}"],"junit":["junit.xml"],"coverage":"coverage.xml"},
+    {"service":"contacts","layer":"integration","cwd":"src/accounts/contacts","command":["bash","scripts/report-tests.sh","integration","{output}"],"junit":["junit.xml"],"coverage":"coverage.xml"}
+  ]
 }

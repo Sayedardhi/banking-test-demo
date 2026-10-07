@@ -69,4 +69,17 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pylint>=3.0",
+    "pytest>=7.4.4",
+    "pytest-cov>=4.1.0",
+    "testcontainers[postgres]>=4.8.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", ".venv/*", "scripts/*"]

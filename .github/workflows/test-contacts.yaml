@@ -1,0 +1,55 @@
+# Unit + PostgreSQL integration tests for the contacts service (PII: account/routing numbers).
+name: test-contacts
+
+on:
+  push:
+    branches: [demo-baseline, "devin/**"]
+    paths:
+      - "src/accounts/contacts/**"
+      - "src/accounts/accounts-db/initdb/**"
+      - ".github/workflows/test-contacts.yaml"
+  pull_request:
+    paths:
+      - "src/accounts/contacts/**"
+      - "src/accounts/accounts-db/initdb/**"
+      - ".github/workflows/test-contacts.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-contacts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contacts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: src/accounts/contacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Python and dependencies
+        run: uv python install && uv sync --frozen --group dev
+      - name: Unit tests
+        id: unit
+        run: scripts/report-tests.sh unit "$RUNNER_TEMP/contacts-reports/unit"
+      - name: Integration tests (PostgreSQL via Testcontainers)
+        id: integration
+        if: ${{ !cancelled() }}
+        run: scripts/report-tests.sh integration "$RUNNER_TEMP/contacts-reports/integration"
+      - name: Job summary (fails on zero discovered tests)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/ci_summary.py "$RUNNER_TEMP/contacts-reports" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contacts-test-reports
+          path: ${{ runner.temp }}/contacts-reports
+          include-hidden-files: true
+          if-no-files-found: warn
