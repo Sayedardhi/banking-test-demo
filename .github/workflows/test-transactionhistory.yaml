@@ -1,0 +1,356 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# transactionhistory tests. Checkstyle + compile, unit and integration (Testcontainers PostgreSQL)
+# run in parallel. Playwright journeys then run against a stack where transactionhistory and every
+# other service is built from this checkout. Each suite runs exactly once; the summary and the
+# dashboard run are assembled from the uploaded reports.
+name: "Tests: transactionhistory"
+
+on:
+  pull_request:
+  push:
+    branches: [demo-baseline, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-transactionhistory-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  SERVICE_DIR: src/ledger/transactionhistory
+  REPORTS: ${{ github.workspace }}/reports
+  # Playwright journeys (tests/e2e) from PR #10, used only if this checkout has no tests/e2e.
+  E2E_SUITE_REF: 9c96622ccb4c45ef19bc5de793f704d1198657c4
+
+jobs:
+  checks:
+    name: Checkstyle + compile
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Checkstyle (module checkstyle.xml)
+        run: ./mvnw -B -pl "$SERVICE_DIR" checkstyle:check | tee checkstyle.txt
+      - name: Compile main and test sources
+        run: ./mvnw -B -pl "$SERVICE_DIR" test-compile -Dcheckstyle.skip=true
+      - name: Upload Checkstyle output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-checkstyle
+          path: |
+            checkstyle.txt
+            src/ledger/transactionhistory/target/checkstyle-result.xml
+          if-no-files-found: warn
+
+  unit:
+    name: Unit (JUnit 5 + Mockito)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Unit tests
+        id: tests
+        run: |
+          set +e
+          "$SERVICE_DIR/scripts/report-tests.sh" unit "$REPORTS/unit"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 "$SERVICE_DIR/scripts/summarize.py" --markdown unit="$REPORTS/unit" >> "$GITHUB_STEP_SUMMARY"
+          python3 "$SERVICE_DIR/scripts/summarize.py" --harness unit="$REPORTS/unit" | tee -a "$GITHUB_OUTPUT"
+      - name: Upload unit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-unit-reports
+          path: ${{ env.REPORTS }}/unit
+          if-no-files-found: warn
+      - name: Fail on unit test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::transactionhistory unit layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  integration:
+    name: Integration (Spring Boot + Testcontainers PostgreSQL)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+      harness: ${{ steps.result.outputs.harness }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Integration tests (one postgres:16-alpine per test class)
+        id: tests
+        run: |
+          set +e
+          "$SERVICE_DIR/scripts/report-tests.sh" integration "$REPORTS/integration"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: Layer result
+        id: result
+        if: always()
+        run: |
+          python3 "$SERVICE_DIR/scripts/summarize.py" --markdown integration="$REPORTS/integration" >> "$GITHUB_STEP_SUMMARY"
+          python3 "$SERVICE_DIR/scripts/summarize.py" --harness integration="$REPORTS/integration" | tee -a "$GITHUB_OUTPUT"
+      - name: Remove leftover Testcontainers containers
+        if: always()
+        run: docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-integration-reports
+          path: ${{ env.REPORTS }}/integration
+          if-no-files-found: warn
+      - name: Fail on integration test failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::transactionhistory integration layer exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  e2e:
+    name: E2E (Playwright, source-built stack)
+    needs: [checks, unit, integration]
+    # Requires valid layer results, not passing ones: known findings must not block the journeys.
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.unit.outputs.harness == 'ok' && needs.integration.outputs.harness == 'ok' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      code: ${{ steps.tests.outputs.code }}
+    env:
+      E2E_BASE_URL: http://localhost:18080
+      AUDIT_URL: http://localhost:18090
+      AUDIT_TOKEN: local-demo-audit-token
+      COMPOSE: docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml
+      OUT: ${{ github.workspace }}/reports/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Playwright suite
+        run: |
+          mkdir -p "$OUT"
+          if [ -f tests/e2e/package.json ]; then
+            echo "E2E_SUITE=tests/e2e from this checkout" | tee -a "$GITHUB_ENV"
+          else
+            git fetch --no-tags --depth=1 origin "$E2E_SUITE_REF"
+            git checkout FETCH_HEAD -- tests/e2e
+            git reset -q
+            echo "E2E_SUITE=tests/e2e from $E2E_SUITE_REF (PR #10); application code from ${GITHUB_SHA}" | tee -a "$GITHUB_ENV"
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Discover tests (zero is a failure)
+        working-directory: tests/e2e
+        run: |
+          n=$(npx playwright test --list | grep -cE '^\s+\[chromium\]' || true)
+          echo "Discovered $n Playwright tests"
+          echo "DISCOVERED=$n" >> "$GITHUB_ENV"
+          test "$n" -gt 0
+      - name: Build the stack from this checkout
+        run: |
+          mkdir -p .local/keys
+          openssl genrsa -out .local/keys/privatekey 2048
+          openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
+          if ! $COMPOSE up -d --build --wait --wait-timeout 900; then
+            $COMPOSE ps -a
+            $COMPOSE logs --no-color --tail 200
+            exit 1
+          fi
+      - name: Readiness and source-image checks
+        run: |
+          for url in "$E2E_BASE_URL/ready" "$E2E_BASE_URL/login" "$AUDIT_URL/health"; do
+            timeout 120 bash -c "until curl -fsS -o /dev/null '$url'; do sleep 2; done"
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$AUDIT_URL/events")" = 401
+          curl -fsS -o /dev/null -H "Authorization: Bearer $AUDIT_TOKEN" "$AUDIT_URL/events"
+          images=$($COMPOSE ps -a --format '{{.Service}} {{.Image}}')
+          echo "$images" | tee "$OUT/stack-images.txt"
+          grep -qx 'transactionhistory banking-e2e/transactionhistory:source' <<<"$images"
+          ! awk '{print $2}' <<<"$images" | grep -v '^banking-e2e/'
+      - name: Playwright journeys
+        id: tests
+        working-directory: tests/e2e
+        env:
+          E2E_STACK: existing
+        run: |
+          set +e
+          bash scripts/report-tests.sh "$OUT"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: E2E summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import os, xml.etree.ElementTree as ET
+          print('### transactionhistory pipeline: Playwright journeys\n')
+          print(f"Suite: {os.environ.get('E2E_SUITE', '?')}. Discovered: {os.environ.get('DISCOVERED', '?')}.\n")
+          try:
+              cases = ET.parse(os.path.join(os.environ['OUT'], 'junit.xml')).getroot().iter('testcase')
+              cases = list(cases)
+              bad = [c.get('name') for c in cases if c.find('failure') is not None or c.find('error') is not None]
+              skipped = sum(c.find('skipped') is not None for c in cases)
+              print(f'Tests {len(cases)}, passed {len(cases) - len(bad) - skipped}, failed {len(bad)}, skipped {skipped}.')
+              for name in bad:
+                  print(f'- failed: {name}')
+          except Exception as exc:
+              print(f'No Playwright JUnit report ({type(exc).__name__}).')
+          PY
+      - name: Collect service logs
+        if: always()
+        run: |
+          [ -f tests/e2e/compose.source.yaml ] || exit 0
+          $COMPOSE ps -a > "$OUT/compose-ps.txt" 2>&1 || true
+          $COMPOSE logs --no-color > "$OUT/compose-logs.txt" 2>&1 || true
+          $COMPOSE logs --no-color transactionhistory > "$OUT/transactionhistory.log" 2>&1 || true
+      - name: Upload Playwright JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-e2e-junit
+          path: reports/e2e/junit.xml
+          if-no-files-found: warn
+      - name: Upload Playwright HTML report, traces, screenshots and videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-e2e-playwright-report
+          path: |
+            reports/e2e/playwright-report.zip
+            reports/e2e/playwright-results.zip
+          if-no-files-found: warn
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-e2e-service-logs
+          path: |
+            reports/e2e/*.txt
+            reports/e2e/*.log
+          if-no-files-found: warn
+      - name: Stop the stack (volumes kept)
+        if: always()
+        run: |
+          docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f
+          [ -f tests/e2e/compose.source.yaml ] || exit 0
+          $COMPOSE down --remove-orphans
+      - name: Fail on Playwright failures
+        if: steps.tests.outputs.code != '0'
+        run: echo "::error::Playwright exited ${{ steps.tests.outputs.code }}" && exit 1
+
+  report:
+    name: Pipeline summary + dashboard run
+    needs: [checks, unit, integration, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.REPORTS }}
+      - name: Summary by layer
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHECKS: ${{ needs.checks.result }}
+          UNIT: ${{ needs.unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          {
+            echo "## transactionhistory pipeline"
+            echo
+            echo "| Stage | Job result | Artifacts |"
+            echo "|---|---|---|"
+            echo "| Checkstyle + compile | $CHECKS | [transactionhistory-checkstyle]($RUN_URL#artifacts) |"
+            echo "| Unit | $UNIT | [transactionhistory-unit-reports]($RUN_URL#artifacts) |"
+            echo "| Integration | $INTEGRATION | [transactionhistory-integration-reports]($RUN_URL#artifacts) |"
+            echo "| E2E (Playwright) | $E2E | [transactionhistory-e2e-playwright-report, -e2e-junit, -e2e-service-logs]($RUN_URL#artifacts) |"
+            echo
+            python3 "$SERVICE_DIR/scripts/summarize.py" --markdown \
+              unit="$REPORTS/transactionhistory-unit-reports" \
+              integration="$REPORTS/transactionhistory-integration-reports"
+            echo
+            python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          path = os.path.join(os.environ['REPORTS'], 'transactionhistory-e2e-junit', 'junit.xml')
+          try:
+              cases = list(ET.parse(path).getroot().iter('testcase'))
+              bad = sum(c.find('failure') is not None or c.find('error') is not None for c in cases)
+              skipped = sum(c.find('skipped') is not None for c in cases)
+              print(f'E2E (Playwright): {len(cases)} tests, {len(cases) - bad - skipped} passed, {bad} failed, {skipped} skipped. '
+                    'Coverage not measured for browser journeys.')
+          except OSError:
+              print('E2E: no JUnit report (job skipped or did not reach Playwright).')
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Dashboard-compatible run (from the reports above, no re-execution)
+        if: always()
+        run: |
+          mkdir -p "$REPORTS/e2e"
+          cp -r "$REPORTS"/transactionhistory-e2e-junit/. "$REPORTS"/transactionhistory-e2e-playwright-report/. "$REPORTS/e2e/" 2>/dev/null || true
+          id=$(python3 "$SERVICE_DIR/scripts/dashboard_run.py" \
+            "transactionhistory:unit:${{ needs.unit.outputs.code || 'none' }}:$REPORTS/transactionhistory-unit-reports" \
+            "transactionhistory:integration:${{ needs.integration.outputs.code || 'none' }}:$REPORTS/transactionhistory-integration-reports" \
+            "journeys:e2e:${{ needs.e2e.outputs.code || 'none' }}:$REPORTS/e2e")
+          echo "Dashboard run \`$id\`: unzip into \`.local/test-observability/runs/\` and run \`dashboard.py serve\`." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload dashboard run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-dashboard-run
+          path: .local/test-observability/runs/
+          if-no-files-found: warn
+      - name: Final status (findings stay red)
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          bad = {k: v['result'] for k, v in json.loads(os.environ['RESULTS']).items() if v['result'] != 'success'}
+          for job, result in bad.items():
+              print(f'::error::{job}: {result}')
+          sys.exit(1 if bad else 0)
+          PY
