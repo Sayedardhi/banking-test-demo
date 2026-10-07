@@ -14,7 +14,7 @@ Node 24 is required because the service uses `node:sqlite` (`source ~/.nvm/nvm.s
 cd src/audit
 npm ci
 npm run typecheck                 # production + test sources
-npm run test:unit                 # -> test-results/unit/{junit.xml,coverage.xml,coverage/}
+npm run test:unit                 # -> test-results/unit/{junit.xml,coverage.xml,lcov.info,coverage-html.zip}
 npm run test:integration          # -> test-results/integration/...
 npm test                          # both layers in one run -> test-results/all/...
 bash scripts/report-tests.sh <unit|integration|all> <output-dir>   # what CI and the dashboard call

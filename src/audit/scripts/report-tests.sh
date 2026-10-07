@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run one audit test layer with coverage and write JUnit + Cobertura reports.
 # Usage: scripts/report-tests.sh <unit|integration|all> <output-dir>
-# Writes <output-dir>/junit.xml, coverage.xml (Cobertura), coverage-summary.json and coverage/ (HTML, lcov).
+# Writes <output-dir>/junit.xml, coverage.xml (Cobertura), coverage-summary.json, lcov.info and coverage-html.zip.
 # Exit code: the test runner's exit code; 3 if no tests were discovered.
 # Set C8_RAW_DIR to keep raw V8 coverage (used by CI to merge layers).
 set -uo pipefail
@@ -20,7 +20,7 @@ if [ "$major" -lt 24 ] && [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"
 major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
 [ "$major" -ge 24 ] || { echo "audit tests need Node 24 (node:sqlite); found $(node -v 2>&1)" >&2; exit 2; }
 mkdir -p "$out" && out="$(cd "$out" && pwd)"
-rm -rf "$out/junit.xml" "$out/coverage.xml" "$out/coverage-summary.json" "$out/coverage"
+rm -rf "$out/junit.xml" "$out/coverage.xml" "$out/coverage-summary.json" "$out/lcov.info" "$out/coverage-html.zip" "$out/coverage"
 raw="${C8_RAW_DIR:-$out/.v8-raw}"
 
 if [ ! -x node_modules/.bin/c8 ]; then npm ci --no-audit --no-fund || exit 2; fi
@@ -38,6 +38,11 @@ status=$?
 
 [ -f "$out/coverage/cobertura-coverage.xml" ] && cp "$out/coverage/cobertura-coverage.xml" "$out/coverage.xml"
 [ -f "$out/coverage/coverage-summary.json" ] && cp "$out/coverage/coverage-summary.json" "$out/coverage-summary.json"
+[ -f "$out/coverage/lcov.info" ] && cp "$out/coverage/lcov.info" "$out/lcov.info"
+# Keep the browsable HTML coverage report as a single archive so evidence listings stay readable.
+if [ -d "$out/coverage" ]; then
+  (cd "$out/coverage" && python3 -m zipfile -c "$out/coverage-html.zip" .) && rm -rf "$out/coverage"
+fi
 [ -z "${C8_RAW_DIR:-}" ] && rm -rf "$raw"
 
 cases=$(grep -c '<testcase' "$out/junit.xml" 2>/dev/null || true)
