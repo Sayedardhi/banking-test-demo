@@ -191,6 +191,8 @@ jobs:
     outputs:
       code: ${{ steps.tests.outputs.code }}
     env:
+      E2E_VIDEO: 'on'
+      E2E_TRACE: 'on'
       FRONTEND_URL: http://localhost:18080
       AUDIT_URL: http://localhost:18090
       AUDIT_TOKEN: local-demo-audit-token

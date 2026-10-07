@@ -19,9 +19,9 @@ export default defineConfig({
   ],
   use: {
     baseURL: process.env.FRONTEND_URL ?? 'http://localhost:18080',
-    trace: 'retain-on-failure',
+    trace: (process.env.E2E_TRACE as 'on' | 'retain-on-failure' | undefined) ?? 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: (process.env.E2E_VIDEO as 'on' | 'retain-on-failure' | undefined) ?? 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });
