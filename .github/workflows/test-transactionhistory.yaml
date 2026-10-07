@@ -1,0 +1,63 @@
+name: test-transactionhistory
+on:
+  pull_request:
+    paths:
+      - 'src/ledger/transactionhistory/**'
+      - 'src/ledger/ledger-db/initdb/**'
+      - '.github/workflows/test-transactionhistory.yaml'
+  push:
+    branches:
+      - demo-baseline
+    paths:
+      - 'src/ledger/transactionhistory/**'
+      - 'src/ledger/ledger-db/initdb/**'
+      - '.github/workflows/test-transactionhistory.yaml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transactionhistory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Unit tests (JUnit/Mockito, JaCoCo)
+        id: unit
+        continue-on-error: true
+        run: bash src/ledger/transactionhistory/scripts/report-tests.sh unit "$RUNNER_TEMP/reports/unit"
+      - name: Integration tests (Spring Boot + Testcontainers postgres:16-alpine, JaCoCo)
+        id: integration
+        continue-on-error: true
+        run: bash src/ledger/transactionhistory/scripts/report-tests.sh integration "$RUNNER_TEMP/reports/integration"
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## transactionhistory tests"
+            echo
+            echo "| Layer | Status | Tests | Passed | Failed | Skipped | Line covered/total | Branch covered/total |"
+            echo "|---|---|---|---|---|---|---|---|"
+            for layer in unit integration; do
+              cat "$RUNNER_TEMP/reports/$layer/summary.md" 2>/dev/null || echo "| $layer | NO REPORT | 0 | 0 | 0 | 0 | unmeasured | unmeasured |"
+            done
+            echo
+            echo "Coverage is per layer for this service only (JaCoCo, all classes under src/main/java); it is not averaged across services."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transactionhistory-test-reports
+          path: ${{ runner.temp }}/reports
+          if-no-files-found: warn
+      - name: Fail on test failures or zero discovered tests
+        if: always()
+        run: |
+          test "${{ steps.unit.outcome }}" = success || { echo "unit layer failed"; failed=1; }
+          test "${{ steps.integration.outcome }}" = success || { echo "integration layer failed"; failed=1; }
+          exit "${failed:-0}"
