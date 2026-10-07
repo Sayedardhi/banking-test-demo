@@ -27,6 +27,8 @@ jobs:
       REPORTS: ${{ github.workspace }}/userservice-reports
     defaults:
       run:
+        # Explicit shell enables pipefail so `| tee` keeps the pytest exit code.
+        shell: bash
         working-directory: src/accounts/userservice
     steps:
       - uses: actions/checkout@v4
