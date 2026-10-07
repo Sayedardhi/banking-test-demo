@@ -55,7 +55,7 @@ select { width: 100%; font: 11px var(--mono); background: #fff; border: 1px soli
 .run-state { margin-left: auto; text-align: right; font-size: 11px; color: var(--green); white-space: nowrap; }
 .run-state small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
 .notice { margin: 13px 0 0; padding: 9px 12px; border-left: 2px solid #d2a85e; background: #fcf5e8; color: #7f673f; font-size: 11px; }
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); padding: 29px 0 30px; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); padding: 29px 0 30px; }
 .metric { padding: 0 24px; border-left: 1px solid var(--line); }
 .metric:first-child { padding-left: 0; border: 0; }
 .metric-label { font-size: 11px; color: #6e7669; margin-bottom: 9px; }

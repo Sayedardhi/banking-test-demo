@@ -84,7 +84,6 @@ function renderSummary(run, baseline) {
   const allResults = run.services.flatMap(service => Object.values(service.layers));
   const services = run.services.filter(service => service.id !== 'journeys');
   const measured = services.filter(service => service.layers.unit.coverage?.line?.percent != null).length;
-  const gaps = allResults.filter(result => result.status === 'no_harness').length;
   const failures = allResults.filter(result => ['failed', 'blocked'].includes(result.status)).length;
   const increase = baseline ? counts.passed - totals(baseline).passed : 0;
   const change = increase > 0 ? `<span class="metric-change">+${increase}</span>` : '';
@@ -92,7 +91,6 @@ function renderSummary(run, baseline) {
   setHtml('#metrics',
     metric('Passing tests', counts.passed + change, `${counts.failed} failed · ${counts.skipped} skipped`) +
     metric('Services measured', `${measured}<span class="denominator"> / ${services.length}</span>`, 'With unit coverage reports') +
-    metric('Missing unit harnesses', gaps, 'Services without a unit suite') +
     metric('Failed or blocked suites', failures, failures ? 'Open the evidence to investigate' : 'Across executed suites')
   );
 }
