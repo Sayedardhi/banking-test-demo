@@ -3,6 +3,8 @@
 initialize: |
   echo '{ "dns-opts": ["single-request-reopen"], "registry-mirrors": ["https://mirror.gcr.io"] }' | sudo tee /etc/docker/daemon.json
   sudo systemctl restart docker
+  pip install --user -q uv
+  echo "PATH=$HOME/.local/bin:$PATH" >> $ENVRC
 # Install project dependencies (runs during builds, surfaced to agent at session start).
 maintenance: |
   git fetch origin demo-baseline
