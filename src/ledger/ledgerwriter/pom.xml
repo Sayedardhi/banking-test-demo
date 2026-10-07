@@ -272,7 +272,7 @@
                     </execution>
                     <execution>
                         <id>report-integration</id>
-                        <phase>verify</phase>
+                        <phase>post-integration-test</phase>
                         <goals>
                             <goal>report-integration</goal>
                         </goals>
