@@ -53,7 +53,13 @@ jobs:
         mkdir -p .local/keys "$OUT"
         openssl genrsa -out .local/keys/privatekey 2048
         openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
-        $COMPOSE up -d --build --wait --wait-timeout 900
+        if ! $COMPOSE up -d --build --wait --wait-timeout 900; then
+          $COMPOSE ps -a
+          for s in $($COMPOSE ps -a --status exited --format '{{.Service}}'); do
+            echo "::group::logs: $s"; $COMPOSE logs --no-color --tail 150 "$s"; echo "::endgroup::"
+          done
+          exit 1
+        fi
         $COMPOSE images | tee "$OUT/stack-images.txt"
     - name: Service checks
       run: |
