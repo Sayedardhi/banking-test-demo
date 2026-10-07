@@ -1,3 +1,8 @@
 node_modules/
 dist/
 *.sqlite*
+.test-build/
+coverage/
+reports/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
