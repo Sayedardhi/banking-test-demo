@@ -53,6 +53,11 @@ case "$layer" in
     frontend_url="${FRONTEND_URL:-http://localhost:18080}"
     if [ "${E2E_STACK:-auto}" != existing ] && ! curl -fsS -o /dev/null "$frontend_url/ready"; then
       echo "Starting the source-built banking-e2e stack (never removes volumes)"
+      if [ ! -s "$repo/.local/keys/privatekey" ]; then
+        mkdir -p "$repo/.local/keys"
+        openssl genrsa -out "$repo/.local/keys/privatekey" 2048 2>/dev/null
+        openssl rsa -in "$repo/.local/keys/privatekey" -pubout -out "$repo/.local/keys/publickey" 2>/dev/null
+      fi
       (cd "$repo" && docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml \
         up -d --build --wait --wait-timeout 900) || { echo "E2E stack failed to start" >&2; exit 2; }
     fi

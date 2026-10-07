@@ -218,6 +218,10 @@ jobs:
           test "$n" -gt 0
       - name: Build the frontend and the whole banking stack from this checkout
         run: |
+          # Throwaway JWT signing keys for this run only (compose mounts .local/keys; never committed).
+          mkdir -p .local/keys
+          openssl genrsa -out .local/keys/privatekey 2048
+          openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
           if ! $COMPOSE up -d --build --wait --wait-timeout 900; then
             $COMPOSE ps -a
             for s in $($COMPOSE ps -a --status exited --format '{{.Service}}'); do
