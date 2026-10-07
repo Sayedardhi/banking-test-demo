@@ -1,3 +1,7 @@
 node_modules
 dist
 *.sqlite*
+build
+coverage
+test-results
+tests

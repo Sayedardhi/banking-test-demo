@@ -1,0 +1,86 @@
+name: test-audit
+
+on:
+  pull_request:
+    branches: [demo-baseline]
+    paths:
+      - 'src/audit/**'
+      - '.github/workflows/test-audit.yaml'
+      - 'tools/test-observability/config.json'
+  push:
+    branches: [demo-baseline]
+    paths:
+      - 'src/audit/**'
+      - '.github/workflows/test-audit.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit-tests:
+    name: audit unit + integration (Node 24, real SQLite)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/audit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/audit/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck (production + tests)
+        run: npm run typecheck
+      - name: Unit tests + coverage
+        id: unit
+        continue-on-error: true
+        env:
+          C8_RAW_DIR: ${{ runner.temp }}/v8-unit
+        run: bash scripts/report-tests.sh unit test-results/unit
+      - name: Integration tests + coverage (temporary SQLite, spawned server)
+        id: integration
+        continue-on-error: true
+        env:
+          C8_RAW_DIR: ${{ runner.temp }}/v8-integration
+        run: bash scripts/report-tests.sh integration test-results/integration
+      - name: Service coverage (unit + integration union)
+        if: always()
+        run: bash scripts/merge-coverage.sh test-results/service "$RUNNER_TEMP/v8-unit" "$RUNNER_TEMP/v8-integration"
+      - name: Job summary
+        if: always()
+        run: node scripts/ci-summary.mjs test-results >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-unit-reports
+          path: src/audit/test-results/unit/
+          if-no-files-found: warn
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-integration-reports
+          path: src/audit/test-results/integration/
+          if-no-files-found: warn
+      - name: Upload service coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-service-coverage
+          path: src/audit/test-results/service/
+          if-no-files-found: warn
+      - name: Fail on test failures or zero discovered tests
+        if: always()
+        run: |
+          echo "unit=${{ steps.unit.outcome }} integration=${{ steps.integration.outcome }}"
+          test "${{ steps.unit.outcome }}" = success && test "${{ steps.integration.outcome }}" = success
