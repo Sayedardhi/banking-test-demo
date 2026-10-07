@@ -236,11 +236,12 @@ def create_app():
                                 "toRoutingNum": app.config['LOCAL_ROUTING'],
                                 "amount": payment_amount,
                                 "uuid": request.form['uuid']}
-            _submit_transaction(transaction_data)
+            audit_saved = _submit_transaction(transaction_data)
             app.logger.info('Payment initiated successfully.')
             return redirect(code=303,
                             location=url_for('home',
-                                             msg='Payment successful',
+                                             msg=('Payment successful' if audit_saved else
+                                                  'Payment successful; audit recording unavailable'),
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
@@ -303,11 +304,12 @@ def create_app():
                                 "toRoutingNum": app.config['LOCAL_ROUTING'],
                                 "amount": int(Decimal(request.form['amount']) * 100),
                                 "uuid": request.form['uuid']}
-            _submit_transaction(transaction_data)
+            audit_saved = _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
             return redirect(code=303,
                             location=url_for('home',
-                                             msg='Deposit successful',
+                                             msg=('Deposit successful' if audit_saved else
+                                                  'Deposit successful; audit recording unavailable'),
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
@@ -339,9 +341,30 @@ def create_app():
             resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
         except requests.exceptions.HTTPError as http_request_err:
             raise UserWarning(resp.text) from http_request_err
+        audit_saved = True
+        audit_url = os.environ.get('AUDIT_SERVICE_URL')
+        if audit_url:
+            try:
+                event = {
+                    'eventId': transaction_data['uuid'],
+                    'action': 'payment' if request.endpoint == 'payment' else 'deposit',
+                    'outcome': 'succeeded',
+                    'amountCents': transaction_data['amount'],
+                    'fromAccount': transaction_data['fromAccountNum'],
+                    'toAccount': transaction_data['toAccountNum'],
+                }
+                audit_response = requests.post(
+                    audit_url + '/events', json=event,
+                    headers={'Authorization': 'Bearer ' + os.environ.get('AUDIT_TOKEN', '')},
+                    timeout=2)
+                audit_response.raise_for_status()
+            except requests.exceptions.RequestException:
+                audit_saved = False
+                app.logger.warning('Confirmed transaction audit delivery failed')
         # Short delay to allow the transaction to propagate to balancereader
         # and transaction-history
         sleep(0.25)
+        return audit_saved
 
     def _add_contact(label, acct_num, routing_num, is_external_acct=False):
         """

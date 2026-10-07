@@ -1,6 +1,20 @@
 # Local synthetic-data demo. No cloud account required.
 name: banking-demo
 services:
+  audit:
+    build: ./src/audit
+    environment:
+      AUDIT_TOKEN: local-demo-audit-token
+      AUDIT_DB_PATH: /data/audit.sqlite
+    volumes:
+    - audit-data:/data
+    ports:
+    - 127.0.0.1:8090:8080
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   ledgerwriter:
     image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/ledgerwriter:v0.6.11@sha256:b66efed587c295788369459898e7ae5a5e15150c3fcd782170c19a8c4b31059d
     platform: linux/amd64
@@ -133,11 +147,14 @@ services:
       DEFAULT_USERNAME: testuser
       DEFAULT_PASSWORD: bankofanthos
       ENABLE_METRICS: 'false'
+      AUDIT_SERVICE_URL: http://audit:8080
+      AUDIT_TOKEN: local-demo-audit-token
       BANK_NAME: Demo Bank
       CYMBAL_LOGO: 'false'
       METADATA_SERVER: 127.0.0.1:9
     volumes:
     - ./.local/keys:/tmp/.ssh:ro
+    - ./src/frontend/frontend.py:/app/frontend.py:ro
     - ./src/frontend/templates:/app/templates:ro
     - ./src/frontend/static:/app/static:ro
     depends_on:
@@ -223,5 +240,6 @@ services:
       ledger-db:
         condition: service_healthy
 volumes:
+  audit-data: {}
   accounts-db-data: {}
   ledger-db-data: {}

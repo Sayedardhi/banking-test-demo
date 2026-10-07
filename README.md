@@ -41,3 +41,7 @@ Adapted from [Bank of Anthos](https://github.com/GoogleCloudPlatform/bank-of-ant
 ## Frontend styling
 
 The local demo uses a custom responsive theme on the existing Bootstrap Material Design components. Templates and static assets are mounted from this checkout; restart the frontend after template edits. Login, registration, payment, and deposit keep the original service routes and form IDs. The existing Bootstrap, jQuery, and Popper versions are vendored under `src/frontend/static/vendor/` with their original license notices and SHA-384 integrity checks. Material Icons still loads from Google Fonts.
+
+## TypeScript audit demo service
+
+See [the audit service plan and behavior checklist](src/audit/README.md). Successful browser payments/deposits now emit masked audit records. Run `docker compose up -d --build audit frontend`; inspect the authenticated API on localhost:8090. The frontend Python entrypoint is mounted from source for this integration; other existing backend services still use upstream images. The audit service intentionally has no automated test harness or coverage/CI job, ready for the Devin exercise.
