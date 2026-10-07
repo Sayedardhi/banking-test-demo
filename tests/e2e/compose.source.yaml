@@ -1,0 +1,80 @@
+# Source-built E2E stack. Overlays the repository compose.yaml so every backend,
+# both databases and the frontend are built from this checkout instead of the
+# pinned upstream v0.6.11 images. Databases and audit storage are tmpfs, so each
+# `up` starts from the seeded schema and never touches the demo volumes.
+#
+#   docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml up -d --build --wait
+#
+# Paths are relative to the project directory (the repository root).
+services:
+  audit:
+    image: banking-e2e/audit:source
+    volumes: !reset []
+    tmpfs: ['/data:mode=1777']
+    ports: !override
+    - 127.0.0.1:${E2E_AUDIT_PORT:-18090}:8080
+  frontend:
+    image: banking-e2e/frontend:source
+    build: ./src/frontend
+    volumes: !override
+    - ./.local/keys:/tmp/.ssh:ro
+    ports: !override
+    - 127.0.0.1:${E2E_FRONTEND_PORT:-18080}:8080
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/ready', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+  userservice:
+    image: banking-e2e/userservice:source
+    build: ./src/accounts/userservice
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/ready', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+  contacts:
+    image: banking-e2e/contacts:source
+    build: ./src/accounts/contacts
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/ready', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+  ledgerwriter:
+    image: banking-e2e/ledgerwriter:source
+    build: &java
+      context: .
+      dockerfile: tests/e2e/docker/java.Dockerfile
+      args: {SERVICE: ledgerwriter, MAVEN_MIRROR_URL: "${MAVEN_MIRROR_URL:-}"}
+    healthcheck: &java-ready
+      test: [CMD, wget, -q, -O, /dev/null, http://localhost:8080/ready]
+      interval: 3s
+      timeout: 3s
+      retries: 80
+  balancereader:
+    image: banking-e2e/balancereader:source
+    build:
+      <<: *java
+      args: {SERVICE: balancereader, MAVEN_MIRROR_URL: "${MAVEN_MIRROR_URL:-}"}
+    healthcheck: *java-ready
+  transactionhistory:
+    image: banking-e2e/transactionhistory:source
+    build:
+      <<: *java
+      args:
+        SERVICE: transactionhistory
+        MAVEN_MIRROR_URL: "${MAVEN_MIRROR_URL:-}"
+        # pom.xml declares mainClass TransActionHistoryApplication (typo); the class is TransactionHistoryApplication.
+        MAIN_CLASS: anthos.samples.bankofanthos.transactionhistory.TransactionHistoryApplication
+    healthcheck: *java-ready
+  accounts-db:
+    image: banking-e2e/accounts-db:source
+    build: ./src/accounts/accounts-db
+    volumes: !reset []
+    tmpfs: [/var/lib/postgresql/data]
+  ledger-db:
+    image: banking-e2e/ledger-db:source
+    build: ./src/ledger/ledger-db
+    volumes: !reset []
+    tmpfs: [/var/lib/postgresql/data]

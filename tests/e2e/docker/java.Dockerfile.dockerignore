@@ -1,0 +1,5 @@
+*
+!pom.xml
+!src/ledgermonolith/pom.xml
+!src/ledger/**
+**/target

@@ -1,0 +1,133 @@
+# Playwright customer journeys (tests/e2e) against a stack built from this checkout.
+# Cypress in .github/workflows/ui-tests is separate and unchanged.
+name: test-e2e
+on:
+  pull_request:
+    paths:
+    - tests/e2e/**
+    - src/**
+    - compose.yaml
+    - pom.xml
+    - .github/workflows/test-e2e.yaml
+  push:
+    branches: [demo-baseline]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: test-e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    name: journeys (Playwright E2E, source-built stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      E2E_BASE_URL: http://localhost:18080
+      AUDIT_URL: http://localhost:18090
+      AUDIT_TOKEN: local-demo-audit-token
+      MAVEN_MIRROR_URL: https://maven-central.storage-download.googleapis.com/maven2
+      COMPOSE: docker compose -p banking-e2e -f compose.yaml -f tests/e2e/compose.source.yaml
+      OUT: ${{ github.workspace }}/e2e-output
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: tests/e2e/package-lock.json
+    - name: Install Playwright
+      working-directory: tests/e2e
+      run: |
+        npm ci --no-audit --no-fund
+        npx playwright install --with-deps chromium
+    - name: Discover tests (fails on zero)
+      working-directory: tests/e2e
+      run: |
+        n=$(npx playwright test --list | grep -cE '^\s+\[chromium\]' || true)
+        echo "Discovered $n Playwright tests"
+        echo "DISCOVERED=$n" >> "$GITHUB_ENV"
+        test "$n" -gt 0
+    - name: Build and start backends from source
+      run: |
+        mkdir -p .local/keys "$OUT"
+        openssl genrsa -out .local/keys/privatekey 2048
+        openssl rsa -in .local/keys/privatekey -pubout -out .local/keys/publickey
+        $COMPOSE up -d --build --wait --wait-timeout 900
+        $COMPOSE images | tee "$OUT/stack-images.txt"
+    - name: Service checks
+      run: |
+        set -x
+        curl -fsS -o /dev/null "$E2E_BASE_URL/ready"
+        curl -fsS -o /dev/null "$E2E_BASE_URL/login"
+        curl -fsS -o /dev/null "$AUDIT_URL/health"
+        test "$(curl -s -o /dev/null -w '%{http_code}' "$AUDIT_URL/events")" = 401
+        curl -fsS -o /dev/null -H "Authorization: Bearer $AUDIT_TOKEN" "$AUDIT_URL/events"
+        # Every application image must be the locally built source image, not an upstream pin.
+        ! $COMPOSE images --format '{{.Repository}}' | grep -v '^banking-e2e/'
+    - name: Playwright journeys
+      working-directory: tests/e2e
+      env:
+        E2E_STACK: existing
+      run: bash scripts/report-tests.sh "$OUT"
+    - name: Job summary
+      if: always()
+      run: |
+        python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import os, xml.etree.ElementTree as ET
+        out = os.environ['OUT']
+        print('## journeys: Playwright E2E (source-built stack)\n')
+        print('| Layer | Discovered | Passed | Failed | Errored | Skipped | Line coverage | Branch coverage |')
+        print('|---|---|---|---|---|---|---|---|')
+        print('| unit | n/a | | | | | not applicable | not applicable |')
+        print('| integration | n/a | | | | | not applicable | not applicable |')
+        disc = os.environ.get('DISCOVERED', '?')
+        try:
+            r = ET.parse(f'{out}/junit.xml').getroot()
+            cases = r.findall('.//testcase')
+            f = sum(1 for c in cases if c.find('failure') is not None)
+            e = sum(1 for c in cases if c.find('error') is not None)
+            s = sum(1 for c in cases if c.find('skipped') is not None)
+            print(f'| e2e | {disc} | {len(cases)-f-e-s} | {f} | {e} | {s} | not measured (browser black-box) | not measured (browser black-box) |')
+            bad = [c.get('name') for c in cases if c.find('failure') is not None or c.find('error') is not None]
+            if bad:
+                print('\n**Failing journeys**\n'); [print(f'- {n}') for n in bad]
+        except Exception as ex:
+            print(f'| e2e | {disc} | no JUnit report ({type(ex).__name__}) | | | | | |')
+        print('\nLine/branch coverage of backend code is reported by each service\'s own workflow; this job verifies cross-service business outcomes.')
+        try:
+            print('\n<details><summary>Stack images (all built from this checkout)</summary>\n\n```\n' + open(f'{out}/stack-images.txt').read() + '```\n</details>')
+        except OSError:
+            pass
+        PY
+    - name: Collect diagnostics
+      if: always()
+      run: |
+        $COMPOSE ps -a > "$OUT/compose-ps.txt" 2>&1 || true
+        $COMPOSE logs --no-color > "$OUT/compose-logs.txt" 2>&1 || true
+        $COMPOSE down || true
+    - name: Upload JUnit
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-junit
+        path: e2e-output/junit.xml
+        if-no-files-found: warn
+    - name: Upload Playwright HTML report and traces
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-playwright-report
+        path: |
+          e2e-output/playwright-report.zip
+          e2e-output/playwright-results.zip
+        if-no-files-found: warn
+    - name: Upload diagnostics
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-diagnostics
+        path: |
+          e2e-output/compose-*.txt
+          e2e-output/stack-images.txt
+        if-no-files-found: warn
