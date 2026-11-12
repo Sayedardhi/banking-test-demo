@@ -17,6 +17,7 @@ limitations under the License.
 <html lang="en">
   <head>
 {% include 'shared/html_head.html' %}
+    <link rel="stylesheet" href="static/styles/transactions.css">
   </head>
   <body>
 {% include 'shared/platform_banner.html' %}
@@ -129,11 +130,35 @@ limitations under the License.
                 </div>
               </div>
             </div>
+            <form method="get" action="{{ url_for('home') }}" class="transaction-filters" role="search" aria-label="Search transactions">
+              <div class="transaction-filter-search">
+                <label for="transaction-search">Payee or account number</label>
+                <input type="search" class="form-control" id="transaction-search" name="q" maxlength="128" placeholder="Search your transactions" value="{{ filters.get('q', '') }}">
+              </div>
+              <div>
+                <label for="transaction-start-date">From</label>
+                <input type="date" class="form-control" id="transaction-start-date" name="start_date" value="{{ filters.get('start_date', '') }}">
+              </div>
+              <div>
+                <label for="transaction-end-date">To</label>
+                <input type="date" class="form-control" id="transaction-end-date" name="end_date" value="{{ filters.get('end_date', '') }}">
+              </div>
+              <div class="transaction-filter-actions">
+                <button type="submit" class="btn btn-primary">Search</button>
+                <a href="{{ url_for('home') }}" class="btn btn-secondary">Clear</a>
+              </div>
+            </form>
+            {% if history is not none %}
+            <div class="transaction-results-summary">
+              <span role="status">Showing {{ history|length }} of {{ history_count }} available transactions</span>
+              <a href="{{ export_url }}" class="btn btn-outline-primary" id="download-transactions">Download CSV</a>
+            </div>
+            {% endif %}
             <div class="table-responsive mb-0" id="transaction-table">
             {% if history is none %}
               <h4 class="card-table-header">Error: Could Not Load Transactions</h4>
             {% elif history|length == 0 %}
-              <h4 class="card-table-header">No Transactions Found</h4>
+              <p class="card-table-header" role="status">No transactions match your filters. Try another search or clear the filters.</p>
             {% else %}
               <table class="table table-sm table-nowrap card-table">
                 <thead class="text-uppercase">

@@ -1,0 +1,10 @@
+/* Transaction tools follow the existing Bank of Anthos design. */
+.transaction-filters { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; padding: 0 24px 8px; }
+.transaction-filters label { display: block; margin: 0 0 6px; font-size: 12px; font-weight: 500; color: #52606d; }
+.transaction-filter-search { flex: 1; min-width: 230px; }
+.transaction-filters .form-control { min-height: 42px; }
+.transaction-filter-actions { display: flex; gap: 8px; }
+.transaction-filter-actions .btn { margin: 0; }
+.transaction-results-summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 24px; color: #52606d; font-size: 13px; }
+.transaction-results-summary .btn { margin: 0; }
+@media (max-width: 720px) { .transaction-filters > div { flex: 1 1 100%; } .transaction-results-summary { align-items: flex-start; flex-direction: column; } }

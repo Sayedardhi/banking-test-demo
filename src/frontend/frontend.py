@@ -43,6 +43,7 @@ from opentelemetry.instrumentation.jinja2 import Jinja2Instrumentor
 
 # Local imports
 from api_call import ApiCall, ApiRequest
+from transaction_filters import TransactionFilters, filter_transactions, transactions_csv
 from traced_thread_pool_executor import TracedThreadPoolExecutor
 
 # Local constants
@@ -105,6 +106,10 @@ def create_app():
             return redirect(url_for('login_page',
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
+        try:
+            filters = TransactionFilters.from_query(request.args)
+        except ValueError as error:
+            abort(400, description=str(error))
         token_data = decode_token(token)
         display_name = token_data['name']
         username = token_data['user']
@@ -155,6 +160,9 @@ def create_app():
                                  api_response[TRANSACTION_LIST_NAME],
                                  api_response[CONTACTS_NAME])
 
+        history = filter_transactions(api_response[TRANSACTION_LIST_NAME], account_id, filters)
+        history_count = len(api_response[TRANSACTION_LIST_NAME] or [])
+
         return render_template('index.html',
                                account_id=account_id,
                                balance=api_response[BALANCE_NAME],
@@ -162,7 +170,10 @@ def create_app():
                                cluster_name=cluster_name,
                                contacts=api_response[CONTACTS_NAME],
                                cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
-                               history=api_response[TRANSACTION_LIST_NAME],
+                               history=history,
+                               history_count=history_count,
+                               filters=filters.query_values(),
+                               export_url=url_for('export_transactions', **filters.query_values()),
                                message=request.args.get('msg', None),
                                name=display_name,
                                platform=platform,
@@ -199,6 +210,42 @@ def create_app():
                 trans['accountLabel'] = contact_map.get(trans['fromAccountNum'])
             elif trans['fromAccountNum'] == account_id:
                 trans['accountLabel'] = contact_map.get(trans['toAccountNum'])
+
+    @app.route('/transactions/export', methods=['GET'])
+    def export_transactions():
+        """Download only the signed-in customer's matching recent transactions."""
+        token = request.cookies.get(app.config['TOKEN_NAME'])
+        if not verify_token(token):
+            abort(401)
+        token_data = decode_token(token)
+        account_id = token_data['acct']
+        try:
+            filters = TransactionFilters.from_query(request.args)
+        except ValueError as error:
+            abort(400, description=str(error))
+        headers = {'Authorization': 'Bearer ' + token}
+        try:
+            history_response = requests.get(
+                f"{app.config['HISTORY_URI']}/{account_id}",
+                headers=headers, timeout=app.config['BACKEND_TIMEOUT'])
+            history_response.raise_for_status()
+            contacts_response = requests.get(
+                f"{app.config['CONTACTS_URI']}/{token_data['user']}",
+                headers=headers, timeout=app.config['BACKEND_TIMEOUT'])
+            contacts_response.raise_for_status()
+            history = history_response.json()
+            contacts = contacts_response.json()
+        except (RequestException, ValueError):
+            app.logger.warning('Transaction export could not load the account history.')
+            abort(503, description='Transaction history is temporarily unavailable. Try again later.')
+        _populate_contact_labels(account_id, history, contacts)
+        matching = filter_transactions(history, account_id, filters)
+        response = make_response(transactions_csv(matching, account_id))
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = 'attachment; filename="transactions.csv"'
+        response.headers['Cache-Control'] = 'no-store'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
 
     @app.route('/payment', methods=['POST'])
     def payment():

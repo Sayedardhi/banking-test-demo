@@ -76,6 +76,16 @@ spreadsheet formula handling. Keep the suite intact during the live exercise.
 
 ## Completed fallback
 
+The reference branch includes focused checks for filtering, account scoping,
+UTC date boundaries, decimal amounts and CSV escaping. Run them without Docker:
+
+```sh
+python3 -m unittest discover -s src/frontend/tests -p test_transaction_filters.py -v
+```
+
+These checks pass against the prepared fixtures. The full HTTP acceptance suite
+still needs to run against the complete bank before interview use.
+
 ```sh
 ./demo.sh reference
 ./demo.sh test reference
