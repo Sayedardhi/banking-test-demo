@@ -73,7 +73,7 @@ def main():
         'ledgerwriter': service('ledger-writer.yaml', {**ledger, **apis}, {'ledger-db': {'condition': 'service_healthy'}})
     }
     def frontend(path, port):
-        return {**service('frontend.yaml', {**apis, 'SCHEME': 'http', 'BANK_NAME': 'FinTechCo Demo Bank',
+        return {**service('frontend.yaml', {**apis, 'SCHEME': 'http', 'BANK_NAME': 'Demo Bank',
              'ENV_PLATFORM': 'local', 'CLUSTER_NAME': 'interview-local', 'POD_ZONE': 'laptop',
              'METADATA_SERVER': '127.0.0.1:1', 'DEFAULT_USERNAME': 'testuser',
              'DEFAULT_PASSWORD': 'bankofanthos'},

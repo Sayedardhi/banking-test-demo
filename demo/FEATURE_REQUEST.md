@@ -1,6 +1,6 @@
 # Customer request: find and export transactions
 
-FinTechCo customers need to find payments in their recent account activity and
+Demo Bank customers need to find payments in their recent account activity and
 download matching records for their own bookkeeping.
 
 Today the account page shows an unfiltered transaction list. Add this feature to
