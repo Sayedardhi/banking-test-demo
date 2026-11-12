@@ -55,6 +55,7 @@
     "userservice": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/userservice:v0.6.11@sha256:4fcd6638b5ba9ac29096e83ea04f4ff280d1c66874908c7e1156337cad459dc0",
       "platform": "linux/amd64",
+      "hostname": "userservice-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -81,6 +82,7 @@
     "contacts": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/contacts:v0.6.11@sha256:67be31ff16e6e8de0ca0f8ee8fa9c23a900d89b2127d9877e69c488384ef8c2a",
       "platform": "linux/amd64",
+      "hostname": "contacts-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -105,6 +107,7 @@
     "balancereader": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/balancereader:v0.6.11@sha256:42a51d724d0537a5214b653d63c00fd60eb9d8ee0df3f396716c9e47262ae1ee",
       "platform": "linux/amd64",
+      "hostname": "balance-reader-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -136,6 +139,7 @@
     "transactionhistory": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/transactionhistory:v0.6.11@sha256:609acd4d93aed03139a59e3c4f58bedb695cf4649dbe6fae636d2f45bad3d811",
       "platform": "linux/amd64",
+      "hostname": "transaction-history-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -167,6 +171,7 @@
     "ledgerwriter": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/ledgerwriter:v0.6.11@sha256:b66efed587c295788369459898e7ae5a5e15150c3fcd782170c19a8c4b31059d",
       "platform": "linux/amd64",
+      "hostname": "ledger-writer-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -203,6 +208,7 @@
     "frontend": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/frontend:v0.6.11@sha256:5746f018f3d85475e25b8283bf8fb476e2501196bbe71e3ce144527e7280e7ae",
       "platform": "linux/amd64",
+      "hostname": "frontend-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -252,7 +258,7 @@
       "command": [
         "sh",
         "-c",
-        "exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - frontend:create_app()"
+        "exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - \"frontend:create_app()\""
       ],
       "ports": [
         "127.0.0.1:8088:8080"
@@ -261,6 +267,7 @@
     "reference": {
       "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/frontend:v0.6.11@sha256:5746f018f3d85475e25b8283bf8fb476e2501196bbe71e3ce144527e7280e7ae",
       "platform": "linux/amd64",
+      "hostname": "frontend-local",
       "environment": {
         "VERSION": "interview-demo",
         "PORT": "8080",
@@ -310,7 +317,7 @@
       "command": [
         "sh",
         "-c",
-        "exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - frontend:create_app()"
+        "exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - \"frontend:create_app()\""
       ],
       "ports": [
         "127.0.0.1:8089:8080"

@@ -43,7 +43,10 @@ def main():
             'HISTORY_API_ADDR': 'transactionhistory:8080', 'CONTACTS_API_ADDR': 'contacts:8080',
             'USERSERVICE_API_ADDR': 'userservice:8080'}
     def service(manifest, env=None, depends=None):
+        # The Java services derive a container name from HOSTNAME by cutting at the first '-'
+        # (Kubernetes pod naming); Docker's default hostname has no '-', which crashes them.
         return {'image': image(manifest), 'platform': 'linux/amd64',
+                'hostname': manifest.removesuffix('.yaml') + '-local',
                 'environment': {**shared, **(env or {})}, 'volumes': ['./.demo/keys:/tmp/.ssh:ro'],
                 'depends_on': depends or {}, 'restart': 'unless-stopped'}
     def database(manifest, user, password, name, scripts):
@@ -77,7 +80,7 @@ def main():
              {name: {'condition': 'service_started'} for name in ['userservice', 'contacts', 'balancereader', 'transactionhistory', 'ledgerwriter']}),
              'working_dir': '/workspace/frontend',
              'volumes': ['./.demo/keys:/tmp/.ssh:ro', f'{path}:/workspace/frontend:ro'],
-             'command': ['sh', '-c', 'exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - frontend:create_app()'],
+             'command': ['sh', '-c', 'exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - "frontend:create_app()"'],
              'ports': [f'127.0.0.1:{port}:8080']}
     services['frontend'] = frontend('./src/frontend', 8088)
     services['reference'] = {**frontend('./.demo/reference/src/frontend', 8089), 'profiles': ['reference']}
