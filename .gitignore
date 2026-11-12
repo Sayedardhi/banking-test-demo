@@ -214,3 +214,6 @@ go/
 
 # GitHub Actions Google Cloud credentials JSON
 gha-creds-*.json
+
+# Interview runtime, generated keys, and reference checkout.
+.demo/

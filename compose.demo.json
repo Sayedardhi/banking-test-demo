@@ -1,0 +1,323 @@
+{
+  "name": "fintechco-interview",
+  "services": {
+    "accounts-db": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/accounts-db:v0.6.11@sha256:e86d6533bcd05bf9e4d7d495bf03b0a5ca571f526f3a419572b6df2c7913d588",
+      "platform": "linux/amd64",
+      "environment": {
+        "POSTGRES_USER": "accounts-admin",
+        "POSTGRES_PASSWORD": "accounts-pwd",
+        "POSTGRES_DB": "accounts-db",
+        "USE_DEMO_DATA": "False",
+        "LOCAL_ROUTING_NUM": "883745000"
+      },
+      "volumes": [
+        "./demo/accounts-init.sh:/docker-entrypoint-initdb.d/1-load-testdata.sh:ro",
+        "./src/accounts/accounts-db/initdb/1-load-testdata.sql:/demo/accounts.sql:ro",
+        "./demo/seed-contacts.sql:/demo/contacts.sql:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U accounts-admin -d accounts-db"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 40
+      },
+      "restart": "unless-stopped"
+    },
+    "ledger-db": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/ledger-db:v0.6.11@sha256:b434822c3122bc3f4681741fc863c02f7bb2f476b0d6b307e2282b49d896c3dd",
+      "platform": "linux/amd64",
+      "environment": {
+        "POSTGRES_USER": "admin",
+        "POSTGRES_PASSWORD": "password",
+        "POSTGRES_DB": "postgresdb",
+        "USE_DEMO_DATA": "False",
+        "LOCAL_ROUTING_NUM": "883745000"
+      },
+      "volumes": [
+        "./demo/ledger-init.sh:/docker-entrypoint-initdb.d/1_create_transactions.sh:ro",
+        "./demo/seed-ledger.sql:/demo/ledger.sql:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U admin -d postgresdb"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 40
+      },
+      "restart": "unless-stopped"
+    },
+    "userservice": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/userservice:v0.6.11@sha256:4fcd6638b5ba9ac29096e83ea04f4ff280d1c66874908c7e1156337cad459dc0",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "ACCOUNTS_DB_URI": "postgresql://accounts-admin:accounts-pwd@accounts-db:5432/accounts-db",
+        "PRIV_KEY_PATH": "/tmp/.ssh/privatekey",
+        "TOKEN_EXPIRY_SECONDS": "28800"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro"
+      ],
+      "depends_on": {
+        "accounts-db": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped"
+    },
+    "contacts": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/contacts:v0.6.11@sha256:67be31ff16e6e8de0ca0f8ee8fa9c23a900d89b2127d9877e69c488384ef8c2a",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "ACCOUNTS_DB_URI": "postgresql://accounts-admin:accounts-pwd@accounts-db:5432/accounts-db"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro"
+      ],
+      "depends_on": {
+        "accounts-db": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped"
+    },
+    "balancereader": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/balancereader:v0.6.11@sha256:42a51d724d0537a5214b653d63c00fd60eb9d8ee0df3f396716c9e47262ae1ee",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "SPRING_DATASOURCE_URL": "jdbc:postgresql://ledger-db:5432/postgresdb",
+        "SPRING_DATASOURCE_USERNAME": "admin",
+        "SPRING_DATASOURCE_PASSWORD": "password",
+        "POLL_MS": "100",
+        "CACHE_SIZE": "1000",
+        "CACHE_MINUTES": "60",
+        "HISTORY_LIMIT": "100",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro"
+      ],
+      "depends_on": {
+        "ledger-db": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped"
+    },
+    "transactionhistory": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/transactionhistory:v0.6.11@sha256:609acd4d93aed03139a59e3c4f58bedb695cf4649dbe6fae636d2f45bad3d811",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "SPRING_DATASOURCE_URL": "jdbc:postgresql://ledger-db:5432/postgresdb",
+        "SPRING_DATASOURCE_USERNAME": "admin",
+        "SPRING_DATASOURCE_PASSWORD": "password",
+        "POLL_MS": "100",
+        "CACHE_SIZE": "1000",
+        "CACHE_MINUTES": "60",
+        "HISTORY_LIMIT": "100",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro"
+      ],
+      "depends_on": {
+        "ledger-db": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped"
+    },
+    "ledgerwriter": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/ledgerwriter:v0.6.11@sha256:b66efed587c295788369459898e7ae5a5e15150c3fcd782170c19a8c4b31059d",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "SPRING_DATASOURCE_URL": "jdbc:postgresql://ledger-db:5432/postgresdb",
+        "SPRING_DATASOURCE_USERNAME": "admin",
+        "SPRING_DATASOURCE_PASSWORD": "password",
+        "POLL_MS": "100",
+        "CACHE_SIZE": "1000",
+        "CACHE_MINUTES": "60",
+        "HISTORY_LIMIT": "100",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "TRANSACTIONS_API_ADDR": "ledgerwriter:8080",
+        "BALANCES_API_ADDR": "balancereader:8080",
+        "HISTORY_API_ADDR": "transactionhistory:8080",
+        "CONTACTS_API_ADDR": "contacts:8080",
+        "USERSERVICE_API_ADDR": "userservice:8080"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro"
+      ],
+      "depends_on": {
+        "ledger-db": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped"
+    },
+    "frontend": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/frontend:v0.6.11@sha256:5746f018f3d85475e25b8283bf8fb476e2501196bbe71e3ce144527e7280e7ae",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "TRANSACTIONS_API_ADDR": "ledgerwriter:8080",
+        "BALANCES_API_ADDR": "balancereader:8080",
+        "HISTORY_API_ADDR": "transactionhistory:8080",
+        "CONTACTS_API_ADDR": "contacts:8080",
+        "USERSERVICE_API_ADDR": "userservice:8080",
+        "SCHEME": "http",
+        "BANK_NAME": "FinTechCo Demo Bank",
+        "ENV_PLATFORM": "local",
+        "CLUSTER_NAME": "interview-local",
+        "POD_ZONE": "laptop",
+        "METADATA_SERVER": "127.0.0.1:1",
+        "DEFAULT_USERNAME": "testuser",
+        "DEFAULT_PASSWORD": "bankofanthos"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro",
+        "./src/frontend:/workspace/frontend:ro"
+      ],
+      "depends_on": {
+        "userservice": {
+          "condition": "service_started"
+        },
+        "contacts": {
+          "condition": "service_started"
+        },
+        "balancereader": {
+          "condition": "service_started"
+        },
+        "transactionhistory": {
+          "condition": "service_started"
+        },
+        "ledgerwriter": {
+          "condition": "service_started"
+        }
+      },
+      "restart": "unless-stopped",
+      "working_dir": "/workspace/frontend",
+      "command": [
+        "sh",
+        "-c",
+        "exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - frontend:create_app()"
+      ],
+      "ports": [
+        "127.0.0.1:8088:8080"
+      ]
+    },
+    "reference": {
+      "image": "us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/frontend:v0.6.11@sha256:5746f018f3d85475e25b8283bf8fb476e2501196bbe71e3ce144527e7280e7ae",
+      "platform": "linux/amd64",
+      "environment": {
+        "VERSION": "interview-demo",
+        "PORT": "8080",
+        "ENABLE_TRACING": "false",
+        "ENABLE_METRICS": "false",
+        "LOG_LEVEL": "warning",
+        "LOCAL_ROUTING_NUM": "883745000",
+        "PUB_KEY_PATH": "/tmp/.ssh/publickey",
+        "NAMESPACE": "interview-local",
+        "TRANSACTIONS_API_ADDR": "ledgerwriter:8080",
+        "BALANCES_API_ADDR": "balancereader:8080",
+        "HISTORY_API_ADDR": "transactionhistory:8080",
+        "CONTACTS_API_ADDR": "contacts:8080",
+        "USERSERVICE_API_ADDR": "userservice:8080",
+        "SCHEME": "http",
+        "BANK_NAME": "FinTechCo Demo Bank",
+        "ENV_PLATFORM": "local",
+        "CLUSTER_NAME": "interview-local",
+        "POD_ZONE": "laptop",
+        "METADATA_SERVER": "127.0.0.1:1",
+        "DEFAULT_USERNAME": "testuser",
+        "DEFAULT_PASSWORD": "bankofanthos"
+      },
+      "volumes": [
+        "./.demo/keys:/tmp/.ssh:ro",
+        "./.demo/reference/src/frontend:/workspace/frontend:ro"
+      ],
+      "depends_on": {
+        "userservice": {
+          "condition": "service_started"
+        },
+        "contacts": {
+          "condition": "service_started"
+        },
+        "balancereader": {
+          "condition": "service_started"
+        },
+        "transactionhistory": {
+          "condition": "service_started"
+        },
+        "ledgerwriter": {
+          "condition": "service_started"
+        }
+      },
+      "restart": "unless-stopped",
+      "working_dir": "/workspace/frontend",
+      "command": [
+        "sh",
+        "-c",
+        "exec gunicorn --reload --reload-extra-file templates/index.html -b 0.0.0.0:8080 --threads 4 --access-logfile - frontend:create_app()"
+      ],
+      "ports": [
+        "127.0.0.1:8089:8080"
+      ],
+      "profiles": [
+        "reference"
+      ]
+    }
+  }
+}

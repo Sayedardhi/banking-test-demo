@@ -1,5 +1,17 @@
 # Bank of Anthos
 
+## Claude Code interview demo
+
+This branch prepares a customer-requested transaction-search and CSV-export
+exercise on Google's sample bank. Start with [the demo guide](DEMO_README.md).
+It includes the customer ticket, fictional fixtures, launch commands and
+acceptance checks. The completed feature code is on `claude-demo/reference`.
+
+**Preparation status:** local Docker startup and end-to-end acceptance checks
+still need verification. See the guide before rehearsing.
+
+The original upstream documentation follows.
+
 <!-- Checks badge below seem to take a "neutral" check as a negative and shows failures if some checks are neutral. Commenting out the badge for now. -->
 <!-- ![GitHub branch check runs](https://img.shields.io/github/check-runs/GoogleCloudPlatform/bank-of-anthos/main) -->
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fcymbal-bank.fsi.cymbal.dev%2F&label=live%20demo

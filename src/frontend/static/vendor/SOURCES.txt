@@ -1,0 +1,8 @@
+bootstrap-material-design.min.css: https://unpkg.com/bootstrap-material-design@4.1.1/dist/css/bootstrap-material-design.min.css
+jquery.slim.min.js: https://code.jquery.com/jquery-3.2.1.slim.min.js
+popper.min.js: https://unpkg.com/popper.js@1.12.6/dist/umd/popper.min.js
+bootstrap-material-design.js: https://unpkg.com/bootstrap-material-design@4.1.1/dist/js/bootstrap-material-design.js
+roboto.css: https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap
+material-icons.css: https://fonts.googleapis.com/icon?family=Material+Icons
+
+Browser assets from the upstream Google sample. Original notices are retained in downloaded files.

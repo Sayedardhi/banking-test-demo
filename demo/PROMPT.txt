@@ -1,0 +1,12 @@
+Read CLAUDE.md and demo/FEATURE_REQUEST.md. This bank's customers need transaction
+search and CSV export on their existing account page.
+
+Explore the relevant code and propose a small implementation plan. Explain how
+you will preserve account isolation and verify that the CSV matches the screen.
+Wait for my approval before editing.
+
+--- After reviewing the plan, send this as a separate message ---
+
+Go ahead with that plan. Implement the feature, run ./demo.sh test, and show me
+the result and the diff. Do not change the acceptance tests. Call out anything
+you would want a human reviewer to examine before merging.
