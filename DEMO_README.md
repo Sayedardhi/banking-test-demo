@@ -1,4 +1,4 @@
-# FinTechCo banking feature demo
+# Demo Bank banking feature demo
 
 This is Google's actual Bank of Anthos source, with a local interview setup. The
 Python frontend talks to the real Java banking services and PostgreSQL databases.

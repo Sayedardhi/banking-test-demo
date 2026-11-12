@@ -1,27 +1,28 @@
 /*
- * Modern theme for the FinTechCo demo bank.
+ * Modern theme for the demo bank (Anthropic-inspired warm palette).
  * Loaded after cymbal.css and overrides it; no template markup depends on it.
  */
 
 :root {
-  --bg: #f4f6f9;
+  --bg: #faf9f5;
   --surface: #ffffff;
-  --surface-muted: #f8fafc;
-  --ink: #0f172a;
-  --ink-2: #334155;
-  --muted: #64748b;
-  --line: #e5e9f0;
-  --brand: #0f766e;
-  --brand-strong: #115e59;
-  --brand-soft: #e6f4f2;
-  --credit: #059669;
-  --credit-soft: #e7f7f0;
-  --debit: #e11d48;
-  --debit-soft: #fdecef;
+  --surface-muted: #f5f4ee;
+  --ink: #141413;
+  --ink-2: #3d3d3a;
+  --muted: #75746e;
+  --line: #e8e6dc;
+  --brand: #b85433;
+  --brand-strong: #9a4429;
+  --brand-soft: #f7ebe4;
+  --credit: #3b7a4f;
+  --credit-soft: #e9f2ea;
+  --debit: #b42318;
+  --debit-soft: #fbeae7;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 4px 16px rgba(15, 23, 42, .06);
   --shadow-lg: 0 10px 40px rgba(15, 23, 42, .14);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -67,8 +68,8 @@ h1, h2, h3, h4, h5, .h1, .h5 { font-family: var(--font) !important; letter-spaci
   content: "";
   width: 30px; height: 30px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #14b8a6 0%, var(--brand) 55%, #0b3b5b 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 2px 6px rgba(15, 118, 110, .35);
+  background: linear-gradient(135deg, #e3906f 0%, #d97757 45%, #9a4429 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 2px 6px rgba(184, 84, 51, .35);
 }
 .nav-link { color: var(--ink-2) !important; }
 #account-user-name {
@@ -82,7 +83,7 @@ h1, h2, h3, h4, h5, .h1, .h5 { font-family: var(--font) !important; letter-spaci
 #account-user-name::before {
   content: "";
   width: 30px; height: 30px; border-radius: 50%;
-  background: var(--brand-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230f766e'%3E%3Cpath d='M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-8 1.7-8 5v1h16v-1c0-3.3-4.7-5-8-5z'/%3E%3C/svg%3E") center/18px no-repeat;
+  background: var(--brand-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23b85433'%3E%3Cpath d='M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-8 1.7-8 5v1h16v-1c0-3.3-4.7-5-8-5z'/%3E%3C/svg%3E") center/18px no-repeat;
 }
 .dropdown-menu {
   border: 1px solid var(--line);
@@ -125,11 +126,11 @@ h1, h2, h3, h4, h5, .h1, .h5 { font-family: var(--font) !important; letter-spaci
 /* ---------- Balance hero card ---------- */
 .col-lg-4:first-child > .card {
   background:
-    radial-gradient(120% 140% at 100% 0%, rgba(45, 212, 191, .35) 0%, rgba(45, 212, 191, 0) 55%),
-    linear-gradient(135deg, #0b3b5b 0%, #0f766e 100%);
+    radial-gradient(120% 140% at 100% 0%, rgba(217, 119, 87, .55) 0%, rgba(217, 119, 87, 0) 60%),
+    linear-gradient(135deg, #141413 0%, #3a2c25 100%);
   color: #fff;
   border: none !important;
-  box-shadow: 0 12px 30px rgba(15, 118, 110, .28) !important;
+  box-shadow: 0 12px 30px rgba(20, 20, 19, .22) !important;
   min-height: 132px;
 }
 .col-lg-4:first-child > .card .card-body { padding: 1.4rem 1.5rem; }
@@ -170,7 +171,7 @@ h1, h2, h3, h4, h5, .h1, .h5 { font-family: var(--font) !important; letter-spaci
 .card.card-button:hover, .card.card-button:focus {
   background: var(--surface) !important;
   transform: translateY(-2px);
-  border-color: #b7dcd7 !important;
+  border-color: #e8c4b4 !important;
   box-shadow: 0 8px 24px rgba(15, 23, 42, .10) !important;
 }
 .card.card-button:active { background: var(--surface-muted) !important; border-color: var(--brand) !important; }
@@ -220,7 +221,7 @@ h1, h2, h3, h4, h5, .h1, .h5 { font-family: var(--font) !important; letter-spaci
   padding: .7rem 1.4rem;
 }
 .btn:hover, .btn-primary:hover, .btn.btn-primary:hover, .btn:focus, .btn-primary:focus { background: var(--brand-strong) !important; }
-.btn:active, .btn-primary:active { background: #0d4f4a !important; border-color: transparent !important; }
+.btn:active, .btn-primary:active { background: #7f3822 !important; border-color: transparent !important; }
 .btn-secondary, .btn.btn-secondary {
   background: var(--surface) !important;
   color: var(--ink) !important;
@@ -241,7 +242,7 @@ label { font-size: .8rem; }
   padding: 2px 12px;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.input-group:focus-within { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(15, 118, 110, .12); }
+.input-group:focus-within { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(184, 84, 51, .14); }
 .input-group-prepend { margin-right: 4px !important; }
 .input-group-text { background: transparent !important; border: none !important; padding: 0 6px 0 0; }
 .input-group-text .material-icons, .modal-icon { color: var(--muted) !important; font-size: 20px !important; }
@@ -265,12 +266,12 @@ input.form-control:not(.input-group *) {
 }
 input.form-control:not(.input-group *):focus {
   border-color: var(--brand) !important;
-  box-shadow: 0 0 0 4px rgba(15, 118, 110, .12) !important;
+  box-shadow: 0 0 0 4px rgba(184, 84, 51, .14) !important;
 }
 .btn.btn-outline-primary {
   background: var(--surface) !important;
   color: var(--brand) !important;
-  border: 1px solid #b7dcd7 !important;
+  border: 1px solid #e8c4b4 !important;
 }
 .btn.btn-outline-primary:hover, .btn.btn-outline-primary:focus { background: var(--brand-soft) !important; }
 .input-group .invalid-feedback { width: 100%; padding: 0 0 8px; font-size: .82rem; color: var(--debit); }
@@ -283,11 +284,11 @@ input.form-control:not(.input-group *):focus {
   background-color: var(--surface) !important;
   color: var(--ink);
 }
-.custom-select:focus { border-color: var(--brand) !important; box-shadow: 0 0 0 4px rgba(15, 118, 110, .12) !important; }
+.custom-select:focus { border-color: var(--brand) !important; box-shadow: 0 0 0 4px rgba(184, 84, 51, .14) !important; }
 .mb-5 { margin-bottom: 1.5rem !important; }
 
 /* ---------- Modals ---------- */
-.modal-backdrop.show { opacity: .4; background: #0b1220; }
+.modal-backdrop.show { opacity: .4; background: #141413; }
 .modal-content { border: none; border-radius: 20px; box-shadow: var(--shadow-lg); }
 .modal-header { border-bottom: 1px solid var(--line) !important; padding: 1.25rem 1.5rem 1rem !important; align-items: center; }
 .modal-title { font-size: 1.3rem; }
@@ -301,9 +302,9 @@ input.form-control:not(.input-group *):focus {
   box-shadow: var(--shadow-lg) !important;
   margin-top: 1.5rem;
 }
-.snackbar-close { color: #5eead4 !important; }
+.snackbar-close { color: #e3906f !important; }
 .alert { border-radius: 12px; border: none; font-size: .9rem; }
-.alert-danger { background: var(--debit-soft) !important; color: #9f1239 !important; }
+.alert-danger { background: var(--debit-soft) !important; color: #8a1c12 !important; }
 .alert-danger .error-icon { color: var(--debit) !important; }
 .alert-info { background: var(--brand-soft) !important; color: var(--brand-strong) !important; }
 
@@ -347,3 +348,11 @@ input.form-control:not(.input-group *):focus {
   .top-row .account-info { text-align: left !important; margin-top: .75rem; }
   .card.card-button, .col-lg-4:first-child > .card { min-height: 0; }
 }
+
+/* ---------- Serif display type, in the spirit of Anthropic's editorial look ---------- */
+.navbar-brand, .header-title, .card-header-title, .modal-title, #current-balance {
+  font-family: var(--serif) !important;
+  font-weight: 600;
+  letter-spacing: -0.01em !important;
+}
+#current-balance { font-weight: 500; }
