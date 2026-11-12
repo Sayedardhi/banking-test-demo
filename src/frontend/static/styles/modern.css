@@ -255,6 +255,24 @@ label { font-size: .8rem; }
   font-size: 1rem;
   height: 44px;
 }
+/* Standalone inputs (outside an .input-group), e.g. search boxes and date pickers. */
+input.form-control:not(.input-group *) {
+  border: 1px solid var(--line) !important;
+  border-radius: 12px;
+  background-color: var(--surface) !important;
+  padding: 0 14px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input.form-control:not(.input-group *):focus {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, .12) !important;
+}
+.btn.btn-outline-primary {
+  background: var(--surface) !important;
+  color: var(--brand) !important;
+  border: 1px solid #b7dcd7 !important;
+}
+.btn.btn-outline-primary:hover, .btn.btn-outline-primary:focus { background: var(--brand-soft) !important; }
 .input-group .invalid-feedback { width: 100%; padding: 0 0 8px; font-size: .82rem; color: var(--debit); }
 .amount-font, .amount-font::placeholder, .amount-font::-webkit-input-placeholder { font-size: 1.6rem !important; font-weight: 600; }
 .custom-select {
